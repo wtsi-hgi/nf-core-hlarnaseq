@@ -1,10 +1,11 @@
 repository_type: pipeline
 
-nf_core_version: 3.5.2
+nf_core_version: 4.0.2
 
 lint:
   files_unchanged:
     - .github/CONTRIBUTING.md
+    - .gitignore
     - assets/sendmail_template.txt
   multiqc_config: false
   files_exist:

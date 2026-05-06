@@ -54,8 +54,11 @@ For AI-configuration maintenance:
 - Preserve nf-core template structure and naming conventions.
 - Prefer nf-core/modules and nf-core/subworkflows over local custom code when a suitable maintained component exists.
 - Keep workflow logic in Nextflow DSL2.
-- Keep helper analysis scripts in Python or R only when they are genuinely needed.
-- Every runtime dependency must be declared through nf-core-compatible process metadata, containers, Conda environments, or module definitions.
+- Keep custom analysis scripts in Python or R under `bin/`.
+- Assume that everything required to run custom scripts from `bin/` is available in the current Conda profile `nf-core`; 
+  if shell activation is unavailable, preserve the environment explicitly, for example:
+  `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; python bin/<script>.py'`.
+- Every runtime tool dependency must be declared through nf-core-compatible process metadata, containers, Conda environments, or module definitions.
 - Keep containerized execution as the default assumption for validation examples.
 - Keep test data small and suitable for nf-core test profiles.
 - Update `nextflow_schema.json`, docs, tests, and pipeline metadata together when parameters, inputs, or outputs change.
