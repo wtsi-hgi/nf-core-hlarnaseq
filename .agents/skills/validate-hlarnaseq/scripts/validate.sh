@@ -1,37 +1,107 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_DIR="artifacts/validation/${RUN_ID}"
+mkdir -p "${RUN_DIR}"
+
+FAILURES=()
+
+run_check() {
+    local label="$1"
+    local log_name="$2"
+    shift 2
+    local log_file="${RUN_DIR}/${log_name}.log"
+
+    echo "== ${label} =="
+    {
+        echo "Command: $*"
+        echo
+    } | tee "${log_file}"
+
+    set +e
+    "$@" 2>&1 | tee -a "${log_file}"
+    local status=${PIPESTATUS[0]}
+    set -e
+
+    if [[ "${status}" -eq 0 ]]; then
+        echo "PASS: ${label}" | tee -a "${log_file}"
+    else
+        echo "FAIL: ${label} exited with status ${status}" | tee -a "${log_file}"
+        FAILURES+=("${label} (${status})")
+    fi
+}
+
+skip_check() {
+    local label="$1"
+    local reason="$2"
+    local log_name="$3"
+    local log_file="${RUN_DIR}/${log_name}.log"
+
+    echo "== ${label} =="
+    echo "SKIP: ${reason}" | tee "${log_file}"
+}
+
+have_docker=false
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    have_docker=true
+fi
+
 echo "== Environment =="
-command -v nextflow || true
-command -v nf-core || true
-command -v nf-test || true
-command -v pre-commit || true
+{
+    echo "Validation run: ${RUN_ID}"
+    echo "Run directory: ${RUN_DIR}"
+    command -v nextflow || true
+    command -v nf-core || true
+    command -v nf-test || true
+    command -v pre-commit || true
+    command -v docker || true
+    echo "Docker daemon available: ${have_docker}"
+} | tee "${RUN_DIR}/environment.log"
 
-echo "== nf-core lint =="
 if command -v nf-core >/dev/null 2>&1; then
-    nf-core pipelines lint
+    run_check "nf-core lint" "nf-core-lint" nf-core pipelines lint
 else
-    echo "SKIP: nf-core is not installed"
+    skip_check "nf-core lint" "nf-core is not installed" "nf-core-lint"
 fi
 
-echo "== nf-test =="
 if command -v nf-test >/dev/null 2>&1; then
-    nf-test test
+    run_check "nf-test" "nf-test" nf-test test
 else
-    echo "SKIP: nf-test is not installed"
+    skip_check "nf-test" "nf-test is not installed" "nf-test"
 fi
 
-echo "== Nextflow test profile =="
 if command -v nextflow >/dev/null 2>&1; then
-    nextflow run . -profile test --outdir artifacts/validation/nextflow-test
+    run_check "Nextflow test profile" "nextflow-test" \
+        nextflow run . -profile test --outdir "${RUN_DIR}/nextflow-test"
+
+    if [[ "${have_docker}" == true ]]; then
+        run_check "Nextflow test,docker profile" "nextflow-test-docker" \
+            nextflow run . -profile test,docker --outdir "${RUN_DIR}/nextflow-test-docker"
+        run_check "Nextflow debug,test,docker profile" "nextflow-debug-test-docker" \
+            nextflow run . -profile debug,test,docker --outdir "${RUN_DIR}/nextflow-debug-test-docker"
+    else
+        skip_check "Nextflow test,docker profile" "Docker is not available or the daemon is not reachable" "nextflow-test-docker"
+        skip_check "Nextflow debug,test,docker profile" "Docker is not available or the daemon is not reachable" "nextflow-debug-test-docker"
+    fi
 else
-    echo "SKIP: nextflow is not installed"
+    skip_check "Nextflow test profile" "nextflow is not installed" "nextflow-test"
+    skip_check "Nextflow test,docker profile" "nextflow is not installed" "nextflow-test-docker"
+    skip_check "Nextflow debug,test,docker profile" "nextflow is not installed" "nextflow-debug-test-docker"
 fi
 
-echo "== pre-commit =="
 if command -v pre-commit >/dev/null 2>&1; then
-    pre-commit run --all-files
+    run_check "pre-commit" "pre-commit" pre-commit run --all-files
 else
-    echo "SKIP: pre-commit is not installed"
+    skip_check "pre-commit" "pre-commit is not installed" "pre-commit"
 fi
 
+if [[ "${#FAILURES[@]}" -gt 0 ]]; then
+    echo "Validation completed with failures:"
+    printf ' - %s\n' "${FAILURES[@]}"
+    echo "Logs: ${RUN_DIR}"
+    exit 1
+fi
+
+echo "Validation completed without command failures."
+echo "Logs: ${RUN_DIR}"

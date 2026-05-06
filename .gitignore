@@ -9,3 +9,8 @@ testing*
 null/
 
 .idea
+
+artifacts
+.nf-test.log
+.nf-test
+tests/

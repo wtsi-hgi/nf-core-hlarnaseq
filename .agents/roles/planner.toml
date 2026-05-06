@@ -1,0 +1,5 @@
+# Planner role configuration.
+#
+# This file is intentionally minimal: the role is registered from
+# .codex/config.toml, while repository workflow rules live in AGENTS.md and
+# .agents/skills/plan-pipeline-change/SKILL.md.

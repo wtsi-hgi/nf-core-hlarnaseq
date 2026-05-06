@@ -12,3 +12,8 @@ The workflow is intentionally human-in-the-loop:
 
 Agents must not commit changes unless explicitly asked.
 
+## Roles
+
+- `planner`: uses `plan-pipeline-change`; reads relevant files; writes `artifacts/1_plan.md`; stops for approval.
+- `coder`: uses `implement-nfcore-nextflow`; changes only approved scope; writes `artifacts/2_implement.md`.
+- `validator`: uses `validate-hlarnaseq`; runs checks and reviews the diff; writes `artifacts/3_validate.md`.

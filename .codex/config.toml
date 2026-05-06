@@ -6,7 +6,7 @@ max_threads = 3
 max_depth = 1
 
 [agents.planner]
-description = "Planning-focused agent. Produces small, reviewable one-PR plans and uses the plan-change skill."
+description = "Planning-focused agent. Produces small, reviewable one-PR plans and uses the /plan-pipeline-change skill."
 config_file = "../.agents/roles/planner.toml"
 
 [agents.coder]
@@ -14,5 +14,5 @@ description = "Implementation-focused agent. Implements only approved plans usin
 config_file = "../.agents/roles/coder.toml"
 
 [agents.validator]
-description = "Evidence-driven validation agent. Runs checks, reviews regressions, and uses the validate-charlist skill."
+description = "Evidence-driven validation agent. Runs checks, reviews regressions, and uses the /validate-hlarnaseq skill."
 config_file = "../.agents/roles/validator.toml"

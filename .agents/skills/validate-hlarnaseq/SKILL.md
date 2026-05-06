@@ -11,9 +11,10 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 
 1. Read `AGENTS.md`.
 2. Read `artifacts/1_plan.md` and `artifacts/2_implement.md` when present.
-3. Run `.agents/skills/validate-hlarnaseq/scripts/validate.sh` unless the user requests narrower validation.
-4. Review changed files against the approved plan.
-5. Check for nf-core pipeline risks:
+3. Create `artifacts/` if it does not exist.
+4. Run `.agents/skills/validate-hlarnaseq/scripts/validate.sh` unless the user requests narrower validation.
+5. Review changed files against the approved plan.
+6. Check for nf-core pipeline risks:
    - invalid channel contracts;
    - missing `emit` outputs;
    - missing or inconsistent versions reporting;
@@ -23,9 +24,9 @@ Use this skill when asked to validate, review, or quality-check an implementatio
    - missing tool citations;
    - container/Conda dependency gaps;
    - tests or snapshots that do not cover new behavior.
-6. Save the validation report to `artifacts/3_validate.md`.
-7. Report findings first, ordered by severity, with file and line references.
-8. If no findings are found, state that explicitly and list residual risks.
+7. Save the validation report to `artifacts/3_validate.md`.
+8. Report findings first, ordered by severity, with file and line references.
+9. If no findings are found, state that explicitly and list residual risks.
 
 ## Required Report Sections
 
@@ -42,4 +43,3 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 - High: likely runtime failure, incorrect scientific result, invalid schema, broken test profile, missing required containerized dependency.
 - Medium: user-facing docs/schema drift, incomplete validation of changed workflow behavior, missing citations or versions for new tools.
 - Low: maintainability issues, narrow docs gaps, minor style issues that do not affect execution.
-
