@@ -42,11 +42,6 @@ skip_check() {
     echo "SKIP: ${reason}" | tee "${log_file}"
 }
 
-have_docker=false
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    have_docker=true
-fi
-
 echo "== Environment =="
 {
     echo "Validation run: ${RUN_ID}"
@@ -55,8 +50,7 @@ echo "== Environment =="
     command -v nf-core || true
     command -v nf-test || true
     command -v pre-commit || true
-    command -v docker || true
-    echo "Docker daemon available: ${have_docker}"
+    echo "Container validation: skipped by early-stage Conda policy"
 } | tee "${RUN_DIR}/environment.log"
 
 if command -v nf-core >/dev/null 2>&1; then
@@ -75,19 +69,16 @@ if command -v nextflow >/dev/null 2>&1; then
     run_check "Nextflow test profile" "nextflow-test" \
         nextflow run . -profile test --outdir "${RUN_DIR}/nextflow-test"
 
-    if [[ "${have_docker}" == true ]]; then
-        run_check "Nextflow test,docker profile" "nextflow-test-docker" \
-            nextflow run . -profile test,docker --outdir "${RUN_DIR}/nextflow-test-docker"
-        run_check "Nextflow debug,test,docker profile" "nextflow-debug-test-docker" \
-            nextflow run . -profile debug,test,docker --outdir "${RUN_DIR}/nextflow-debug-test-docker"
-    else
-        skip_check "Nextflow test,docker profile" "Docker is not available or the daemon is not reachable" "nextflow-test-docker"
-        skip_check "Nextflow debug,test,docker profile" "Docker is not available or the daemon is not reachable" "nextflow-debug-test-docker"
-    fi
+    run_check "Nextflow debug,test profile" "nextflow-debug-test" \
+        nextflow run . -profile debug,test --outdir "${RUN_DIR}/nextflow-debug-test"
+
+    skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
+    skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
 else
     skip_check "Nextflow test profile" "nextflow is not installed" "nextflow-test"
-    skip_check "Nextflow test,docker profile" "nextflow is not installed" "nextflow-test-docker"
-    skip_check "Nextflow debug,test,docker profile" "nextflow is not installed" "nextflow-debug-test-docker"
+    skip_check "Nextflow debug,test profile" "nextflow is not installed" "nextflow-debug-test"
+    skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
+    skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
 fi
 
 if command -v pre-commit >/dev/null 2>&1; then

@@ -5,8 +5,8 @@ Use these checks when the change cannot be fully proven by automated tests.
 ## Pipeline Smoke
 
 - Run `nextflow run . -profile test --outdir artifacts/validation/nextflow-test`.
-- For container validation, run `nextflow run . -profile test,docker --outdir artifacts/validation/nextflow-test-docker` when Docker is available.
-- For debug warning checks, run `nextflow run . -profile debug,test,docker --outdir artifacts/validation/nextflow-debug-test-docker` when Docker is available.
+- Run `nextflow run . -profile debug,test --outdir artifacts/validation/nextflow-debug-test`.
+- Do not run container validation during the current early-stage development policy; record container checks as intentional policy skips.
 
 ## Schema and Samplesheet
 
@@ -22,7 +22,6 @@ Use these checks when the change cannot be fully proven by automated tests.
 
 ## Dependencies
 
-- Confirm any new tool has a container or Conda declaration compatible with nf-core.
+- Confirm any new tool is expected from the active Conda environment during the current early-stage development policy.
 - Confirm tool versions are captured in pipeline software versions output.
 - Confirm `CITATIONS.md` and README citations are updated when new tools or methods are introduced.
-

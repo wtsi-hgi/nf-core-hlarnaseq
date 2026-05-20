@@ -12,6 +12,11 @@ The workflow is intentionally human-in-the-loop:
 
 Agents must not commit changes unless explicitly asked.
 
+During the current early-stage development policy, 
+assume runtime tools are available in the active Conda environment, 
+place custom Python and R scripts under `bin/`, 
+and do not create, build, pull, or run containers.
+
 ## Roles
 
 - `planner`: uses `plan-pipeline-change`; reads relevant files; writes `artifacts/1_plan.md`; stops for approval.

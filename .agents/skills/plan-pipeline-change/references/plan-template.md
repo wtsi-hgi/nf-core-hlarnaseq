@@ -22,7 +22,7 @@ List each expected file and the reason it will change.
 
 ## nf-core and Dependency Notes
 
-State whether existing nf-core modules/subworkflows will be used. If adding a tool, identify container/Conda and citation implications.
+State whether existing nf-core modules/subworkflows will be used. If adding a tool, identify active-Conda environment assumptions, versions reporting, and citation implications. Do not propose container packaging or containerized execution during the current early-stage policy.
 
 ## Data, Parameter, and Output Impact
 
@@ -35,4 +35,3 @@ List commands and manual checks with pass criteria.
 ## Risks and Open Questions
 
 List implementation risks, blocked validation, and questions requiring human input.
-

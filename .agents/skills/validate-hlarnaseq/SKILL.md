@@ -22,7 +22,7 @@ Use this skill when asked to validate, review, or quality-check an implementatio
    - sample sheet schema/docs drift;
    - missing docs for new outputs;
    - missing tool citations;
-   - container/Conda dependency gaps;
+   - active-Conda dependency gaps;
    - tests or snapshots that do not cover new behavior.
 7. Save the validation report to `artifacts/3_validate.md`.
 8. Report findings first, ordered by severity, with file and line references.
@@ -40,6 +40,13 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 
 ## Severity Guidance
 
-- High: likely runtime failure, incorrect scientific result, invalid schema, broken test profile, missing required containerized dependency.
+- High: likely runtime failure, incorrect scientific result, invalid schema, broken test profile, missing required active-Conda dependency.
 - Medium: user-facing docs/schema drift, incomplete validation of changed workflow behavior, missing citations or versions for new tools.
 - Low: maintainability issues, narrow docs gaps, minor style issues that do not affect execution.
+
+## Early-Stage Conda Policy
+
+- Before validation, verify `nf-core`, `nf-test`, and `nextflow` are available from the active environment.
+- If they are unavailable, try preserving the expected environment path with `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; ...'`.
+- Do not run `docker info` or any containerized profile.
+- Record skipped container checks as intentional policy skips, not environmental failures.

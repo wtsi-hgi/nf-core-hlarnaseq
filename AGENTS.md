@@ -12,11 +12,14 @@ by using personalized reference genomes.
 ## Technology Stack (fixed)
 - Nextflow for workflow execution
 - Python and R for data analysis
-- All external utilities must be available in containers
+- Early-stage development assumption: all external utilities are available in
+  the currently active Conda environment
 - Follow NF-Core template and guidelines
 - Use existing NF-Core modules when possible
 
 Do not introduce alternative frameworks and technologies.
+For this development stage, do not create containers, add container packaging, or run containerized
+execution profiles.
 
 ## Development Model
 
@@ -55,11 +58,19 @@ For AI-configuration maintenance:
 - Prefer nf-core/modules and nf-core/subworkflows over local custom code when a suitable maintained component exists.
 - Keep workflow logic in Nextflow DSL2.
 - Keep custom analysis scripts in Python or R under `bin/`.
-- Assume that everything required to run custom scripts from `bin/` is available in the current Conda profile `nf-core`; 
+- For this development srate, place all custom Python and R scripts in `bin/`
+  instead of packaging them into containers.
+- Assume that everything required to run the pipeline and custom scripts from
+  `bin/` is available in the currently active Conda environment, normally the
+  `nf-core` profile;
   if shell activation is unavailable, preserve the environment explicitly, for example:
   `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; python bin/<script>.py'`.
-- Every runtime tool dependency must be declared through nf-core-compatible process metadata, containers, Conda environments, or module definitions.
-- Keep containerized execution as the default assumption for validation examples.
+- Do not create, build, pull, or run containers for this pipeline at the
+  current development stage.
+- Every runtime tool dependency should be expected from the active Conda
+  environment; document dependency assumptions, but do not add container
+  packaging in this stage.
+- If some tool or library is missing, stop and ask the developer to install it.
 - Keep test data small and suitable for nf-core test profiles.
 - Update `nextflow_schema.json`, docs, tests, and pipeline metadata together when parameters, inputs, or outputs change.
 - Preserve parameter validation through nf-schema.
@@ -74,7 +85,7 @@ For pipeline behavior changes, agents must consider:
 - nf-test coverage or snapshot updates;
 - `docs/usage.md`, `docs/output.md`, `README.md`, `CHANGELOG.md`, and citations when user-facing behavior changes;
 - whether a matching nf-core module already exists;
-- reproducibility of tool versions and containers.
+- reproducibility of tool versions in the active Conda environment.
 
 ## Validation Expectations
 
@@ -92,21 +103,20 @@ environment is active:
 - if the tools are still unavailable, stop and ask the user to activate or fix
   the nf-core environment.
 
-Agents must check that the Docker daemon is reachable before validation:
+Container validation is disabled for the current early-stage development policy:
 
-- run `docker info`;
-- if Docker is installed but the daemon is not reachable, stop and ask the user
-  to start Docker before running full validation;
-- only continue without Docker when the user explicitly requests non-Docker
-  validation, and record the skipped Docker checks in `artifacts/3_validate.md`.
+- do not run `docker info`;
+- do not create or run containers;
+- record in `artifacts/3_validate.md` that containerized validation is
+  intentionally out of scope for the current early-stage development policy.
 
-When the validation script needs network access, Docker access, or access to
-tool caches outside the sandbox, agents must run it with escalated privileges.
+When the validation script needs network access or access to tool caches outside
+the sandbox, agents must run it with escalated privileges.
 In Codex this means calling the shell command with
 `sandbox_permissions="require_escalated"` and a justification such as:
 
-> Do you want to allow validation to access network, Docker, and local tool
-> caches while preserving the activated nf-core Conda environment?
+> Do you want to allow validation to access network and local tool caches while
+> preserving the activated nf-core Conda environment?
 
 When escalation is required and the nf-core environment path must be preserved,
 use this command shape:
@@ -119,11 +129,14 @@ Preferred checks, when available:
 
 - `nf-core pipelines lint`
 - `nf-test test`
-- `nextflow run . -profile test,docker --outdir <OUTDIR>`
-- `nextflow run . -profile debug,test,docker --outdir <OUTDIR>`
+- `nextflow run . -profile test --outdir <OUTDIR>`
+- `nextflow run . -profile debug,test --outdir <OUTDIR>`
 - `pre-commit run --all-files`
 
-If a check is unavailable or blocked by missing tools, network, Docker, or test data, record that explicitly in `artifacts/3_validate.md` with the command attempted and the residual risk.
+If a check is unavailable or blocked by missing tools, network, or test data,
+record that explicitly in `artifacts/3_validate.md` with the command attempted
+and the residual risk. 
+Record skipped container checks as intentional policy skips, not environmental failures.
 
 Validation scripts should write logs and Nextflow output directories under a
 unique `artifacts/validation/<timestamp>/` directory so repeated validation
