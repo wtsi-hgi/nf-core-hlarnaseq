@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+# Reference genome - we need it both for RNASeq and for CRAM recoding
+# A good description of Different reference genomes is here:
+# https://github.com/lh3/ref-gen/blob/main/README.md
+
+if
+wget -c https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.29_GRCh38.p14/GCA_000001405.29_GRCh38.p14_genomic.fna.gz
+gunzip -c GCA_000001405.29_GRCh38.p14_genomic.fna.gz > .fa
+
+export REF_CACHE=""
+
+# For DNA sample we use HG001/NA12878
+
+# Indexes page
+# https://github.com/genome-in-a-bottle/giab_data_indexes/tree/master/NA12878
+# Indes that we use: https://github.com/genome-in-a-bottle/giab_data_indexes/blob/master/NA12878/alignment.index.NA12878_Illumina300X_wgs_novoalign_GRCh37_GRCh38_NHGRI_03082016
+
+# 1000 genomes data:
+# https://www.internationalgenome.org/data-portal/sample/NA12878
+ wget -c ftp://ftp.sra.ebi.ac.uk/vol1/run/ERR323/ERR3239334/NA12878.final.cram
+
+
