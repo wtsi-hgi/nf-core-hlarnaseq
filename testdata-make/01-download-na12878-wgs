@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+mkdir -p "${WGS_DIR}"
+
+download_file "${NA12878_BASE_URL}/${NA12878_CRAM_NAME}" "${NA12878_CRAM}"
+download_file "${NA12878_BASE_URL}/${NA12878_CRAI_NAME}" "${NA12878_CRAI}"
+
+echo "NA12878 WGS CRAM ready: ${NA12878_CRAM}"

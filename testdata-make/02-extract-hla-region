@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+require_command samtools "samtools is required to extract the HLA region."
+
+require_file "${REFERENCE_FASTA}" "Run testdata-make/00-download-reference first."
+require_file "${REFERENCE_FAI}" "Run testdata-make/00-download-reference first."
+require_file "${NA12878_CRAM}" "Run testdata-make/01-download-na12878-wgs first."
+require_file "${NA12878_CRAI}" "Run testdata-make/01-download-na12878-wgs first."
+
+mkdir -p "${HLA_DIR}"
+
+if [ -s "${HLA_BAM}" ]; then
+    echo "Already present: ${HLA_BAM}"
+else
+    echo "Extracting ${REGION} from ${NA12878_CRAM}"
+    rm -f "${HLA_TMP_BAM}"
+    samtools view \
+        -@ "${THREADS}" \
+        -T "${REFERENCE_FASTA}" \
+        -b \
+        -o "${HLA_TMP_BAM}" \
+        "${NA12878_CRAM}" \
+        "${REGION}"
+    mv "${HLA_TMP_BAM}" "${HLA_BAM}"
+fi
+
+if [ -s "${HLA_BAI}" ]; then
+    echo "Already present: ${HLA_BAI}"
+else
+    samtools index -@ "${THREADS}" "${HLA_BAM}"
+fi
+
+echo "HLA-region BAM ready: ${HLA_BAM}"

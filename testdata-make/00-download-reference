@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+mkdir -p "${REFERENCE_DIR}"
+
+download_file "${REFERENCE_BASE_URL}/${REFERENCE_FASTA_NAME}" "${REFERENCE_FASTA}"
+
+if [ -s "${REFERENCE_FAI}" ]; then
+    echo "Already present: ${REFERENCE_FAI}"
+else
+    download_file "${REFERENCE_BASE_URL}/${REFERENCE_FAI_NAME}" "${REFERENCE_FAI}"
+fi
+
+echo "Reference ready: ${REFERENCE_FASTA}"
