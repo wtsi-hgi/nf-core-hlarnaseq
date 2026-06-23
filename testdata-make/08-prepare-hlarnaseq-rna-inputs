@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+require_command samtools "samtools is required to extract HLA-region BAM files."
+
+GENOME_SAMPLE_ID="${GENOME_SAMPLE_ID:-NA12878}"
+RNASEQ_RESULTS_DIR="${RNASEQ_RESULTS_DIR:-${RNASEQ_OUTDIR}}"
+
+if [ ! -d "${RNASEQ_RESULTS_DIR}" ]; then
+    echo "ERROR: nf-core/rnaseq results directory not found: ${RNASEQ_RESULTS_DIR}" >&2
+    echo "Run testdata-make/07-run-rnaseq-star-featurecounts first, or set RNASEQ_RESULTS_DIR." >&2
+    exit 1
+fi
+
+mkdir -p "${RNA_HLARNASEQ_DIR}" "${RNA_HLA_BAM_DIR}"
+
+tmp_manifest="${RNA_HLARNASEQ_MANIFEST}.tmp"
+printf 'rna_sample_id,genome_sample_id,star_bam_path,featurecounts_path,unmapped_fastq_r1,unmapped_fastq_r2\n' > "${tmp_manifest}"
+
+find_featurecounts() {
+    sample=$1
+    find "${RNASEQ_RESULTS_DIR}" -type f \
+        \( -path '*/featureCounts/*' -o -path '*/featurecounts/*' \) \
+        \( -name "${sample}*.txt" -o -name "${sample}*.tsv" -o -name "${sample}*.csv" \) \
+        ! -name '*.summary' \
+        | sort | head -n 1
+}
+
+find_unmapped_read() {
+    sample=$1
+    read_num=$2
+    find "${RNASEQ_RESULTS_DIR}" -type f \
+        \( -path '*/star_salmon/*' -o -path '*/star_rsem/*' -o -path '*/star/*' -o -path '*/unaligned/*' -o -path '*/unmapped/*' \) \
+        \( -name "${sample}*Unmapped.out.mate${read_num}.gz" \
+           -o -name "${sample}*unmapped*_${read_num}.fastq.gz" \
+           -o -name "${sample}*unmapped*_${read_num}.fq.gz" \
+           -o -name "${sample}*unmapped*R${read_num}*.fastq.gz" \
+           -o -name "${sample}*unmapped*R${read_num}*.fq.gz" \) \
+        | sort | head -n 1
+}
+
+rows=0
+while IFS= read -r -d '' star_bam; do
+    bam_name=$(basename -- "${star_bam}")
+    sample=${bam_name%%.markdup.sorted.bam}
+    sample=${sample%%.sorted.bam}
+    sample=${sample%%.Aligned.sortedByCoord.out.bam}
+    sample=${sample%%.Aligned.out.bam}
+    sample=${sample%%.bam}
+
+    featurecounts_path=$(find_featurecounts "${sample}")
+    unmapped_r1=$(find_unmapped_read "${sample}" 1)
+    unmapped_r2=$(find_unmapped_read "${sample}" 2)
+
+    if [ -z "${featurecounts_path}" ]; then
+        echo "ERROR: featureCounts output not found for sample ${sample}" >&2
+        echo "Looked below: ${RNASEQ_RESULTS_DIR}" >&2
+        exit 1
+    fi
+    if [ -z "${unmapped_r1}" ] || [ -z "${unmapped_r2}" ]; then
+        echo "ERROR: paired unmapped FASTQs not found for sample ${sample}" >&2
+        echo "Looked below: ${RNASEQ_RESULTS_DIR}" >&2
+        exit 1
+    fi
+
+    hla_bam="${RNA_HLA_BAM_DIR}/${sample}.chr6_hla.GRCh38.bam"
+    if [ -s "${hla_bam}" ]; then
+        echo "Already present: ${hla_bam}"
+    else
+        tmp_bam="${hla_bam}.tmp"
+        rm -f "${tmp_bam}"
+        samtools view \
+            -@ "${THREADS}" \
+            -b \
+            "${star_bam}" \
+            "${REGION}" \
+            -o "${tmp_bam}"
+        mv "${tmp_bam}" "${hla_bam}"
+    fi
+
+    if [ -s "${hla_bam}.bai" ]; then
+        echo "Already present: ${hla_bam}.bai"
+    else
+        samtools index -@ "${THREADS}" "${hla_bam}"
+    fi
+
+    star_bam_abs=$(cd -- "$(dirname -- "${star_bam}")" && pwd -P)/$(basename -- "${star_bam}")
+    featurecounts_abs=$(cd -- "$(dirname -- "${featurecounts_path}")" && pwd -P)/$(basename -- "${featurecounts_path}")
+    unmapped_r1_abs=$(cd -- "$(dirname -- "${unmapped_r1}")" && pwd -P)/$(basename -- "${unmapped_r1}")
+    unmapped_r2_abs=$(cd -- "$(dirname -- "${unmapped_r2}")" && pwd -P)/$(basename -- "${unmapped_r2}")
+
+    printf '%s,%s,%s,%s,%s,%s\n' \
+        "${sample}" \
+        "${GENOME_SAMPLE_ID}" \
+        "${star_bam_abs}" \
+        "${featurecounts_abs}" \
+        "${unmapped_r1_abs}" \
+        "${unmapped_r2_abs}" \
+        >> "${tmp_manifest}"
+    rows=$((rows + 1))
+done < <(find "${RNASEQ_RESULTS_DIR}" -type f \
+    \( -path '*/star_salmon/*' -o -path '*/star_rsem/*' -o -path '*/star/*' \) \
+    \( -name '*.markdup.sorted.bam' -o -name '*.sorted.bam' -o -name '*.Aligned.sortedByCoord.out.bam' -o -name '*.Aligned.out.bam' \) \
+    ! -name '*.toTranscriptome.*' \
+    -print0 | sort -z)
+
+if [ "${rows}" -eq 0 ]; then
+    rm -f "${tmp_manifest}"
+    echo "ERROR: no STAR genome BAM files found below ${RNASEQ_RESULTS_DIR}" >&2
+    exit 1
+fi
+
+mv "${tmp_manifest}" "${RNA_HLARNASEQ_MANIFEST}"
+
+echo "hlarnaseq RNA manifest ready: ${RNA_HLARNASEQ_MANIFEST}"
+echo "HLA-region BAMs are under: ${RNA_HLA_BAM_DIR}"
+echo "Samples: ${rows}"

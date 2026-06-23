@@ -72,3 +72,76 @@ before running the download steps.
 
 Shared constants and shell helper functions live in `lib/`. The numbered
 scripts are the supported entry points.
+
+## GM12878 RNA Data for hlarnaseq Inputs
+
+Download and convert the GM12878 / NA12878-compatible RNA-seq FASTQs:
+
+```bash
+testdata-make/05-download-na12878-rna
+```
+
+Then prepare an nf-core/rnaseq samplesheet from the downloaded paired FASTQs:
+
+```bash
+testdata-make/06-make-rnaseq-samplesheet
+```
+
+Run the RNA samples through nf-core/rnaseq with STAR alignment, STAR two-pass
+mode, saved unaligned reads, and pseudoalignment disabled:
+
+```bash
+GENOME=GRCh38 testdata-make/07-run-rnaseq-star-featurecounts
+```
+
+Alternatively, provide explicit references:
+
+```bash
+FASTA=/path/to/GRCh38.fa \
+GTF=/path/to/genes.gtf \
+STAR_INDEX=/path/to/star_index \
+testdata-make/07-run-rnaseq-star-featurecounts
+```
+
+This script intentionally uses `nf-core/rnaseq`, not `nf-core/sarek`. The
+RNA-specific STAR, featureCounts, `--save_unaligned`, and Salmon/pseudoalignment
+controls are part of nf-core/rnaseq; nf-core/sarek is a DNA variant-calling
+pipeline and is not the correct tool for this RNA alignment/counting step.
+
+The rnaseq run uses the Conda profile by default and expects `nextflow` to be
+available in the active `nf-core` Conda environment. It writes under:
+
+- `data/rna/rnaseq_samplesheet.csv`
+- `data/rna/nf-core-rnaseq/`
+- `data/rna/work/`
+
+After nf-core/rnaseq completes, extract the HLA interval from STAR-aligned BAMs
+and write the RNA manifest expected by hlarnaseq:
+
+```bash
+testdata-make/08-prepare-hlarnaseq-rna-inputs
+```
+
+Outputs:
+
+- `data/rna_hlarnaseq/rna_samples.csv`
+- `data/rna_hlarnaseq/hla_bam/<sample>.chr6_hla.GRCh38.bam`
+- `data/rna_hlarnaseq/hla_bam/<sample>.chr6_hla.GRCh38.bam.bai`
+
+The manifest has the columns:
+
+```text
+rna_sample_id,genome_sample_id,star_bam_path,featurecounts_path,unmapped_fastq_r1,unmapped_fastq_r2
+```
+
+Useful overrides:
+
+- `RNA_FASTQ_ROOT`: directory containing downloaded paired FASTQs.
+- `RNASEQ_SAMPLESHEET`: output path for the nf-core/rnaseq samplesheet.
+- `RNASEQ_OUTDIR`: nf-core/rnaseq output directory.
+- `RNASEQ_WORKDIR`: Nextflow work directory for the rnaseq run.
+- `RNASEQ_REVISION`: nf-core/rnaseq revision passed with `-r`.
+- `RNASEQ_EXTRA_ARGS`: additional arguments appended to the nf-core/rnaseq command.
+- `RNASEQ_EXTRA_STAR_ALIGN_ARGS`: STAR arguments, defaulting to `--twopassMode Basic`.
+- `HLA_REGION`: override the HLA interval; defaults to `chr6:28510120-33480577`.
+- `GENOME_SAMPLE_ID`: genome sample ID written to `rna_samples.csv`; defaults to `NA12878`.

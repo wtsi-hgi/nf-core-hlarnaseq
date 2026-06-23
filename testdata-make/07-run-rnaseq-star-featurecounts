@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+require_command nextflow "nextflow is required and should be available from the active nf-core Conda environment."
+require_file "${RNASEQ_SAMPLESHEET}" "nf-core/rnaseq samplesheet is required. Run testdata-make/06-make-rnaseq-samplesheet first."
+
+RNASEQ_PIPELINE="${RNASEQ_PIPELINE:-nf-core/rnaseq}"
+RNASEQ_PROFILE="${RNASEQ_PROFILE:-conda}"
+RNASEQ_ALIGNER="${RNASEQ_ALIGNER:-star_salmon}"
+RNASEQ_EXTRA_STAR_ALIGN_ARGS="${RNASEQ_EXTRA_STAR_ALIGN_ARGS:---twopassMode Basic}"
+
+mkdir -p "${RNASEQ_OUTDIR}" "${RNASEQ_WORKDIR}"
+
+reference_args=()
+if [ -n "${GENOME:-}" ]; then
+    reference_args+=(--genome "${GENOME}")
+elif [ -n "${FASTA:-}" ] && [ -n "${GTF:-}" ]; then
+    require_file "${FASTA}" "FASTA reference set by FASTA was not found."
+    require_file "${GTF}" "GTF annotation set by GTF was not found."
+    reference_args+=(--fasta "${FASTA}" --gtf "${GTF}" --igenomes_ignore)
+else
+    echo "ERROR: set GENOME, or set both FASTA and GTF, before running nf-core/rnaseq." >&2
+    echo "Example: GENOME=GRCh38 testdata-make/07-run-rnaseq-star-featurecounts" >&2
+    exit 1
+fi
+
+if [ -n "${STAR_INDEX:-}" ]; then
+    if [ ! -e "${STAR_INDEX}" ]; then
+        echo "ERROR: STAR_INDEX does not exist: ${STAR_INDEX}" >&2
+        exit 1
+    fi
+    reference_args+=(--star_index "${STAR_INDEX}")
+fi
+
+revision_args=()
+if [ -n "${RNASEQ_REVISION:-}" ]; then
+    revision_args+=(-r "${RNASEQ_REVISION}")
+fi
+
+extra_args=()
+if [ -n "${RNASEQ_EXTRA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    extra_args=(${RNASEQ_EXTRA_ARGS})
+fi
+
+echo "Running ${RNASEQ_PIPELINE} with STAR two-pass alignment and no pseudoalignment."
+echo "Output directory: ${RNASEQ_OUTDIR}"
+
+nextflow run "${RNASEQ_PIPELINE}" \
+    "${revision_args[@]}" \
+    -profile "${RNASEQ_PROFILE}" \
+    -work-dir "${RNASEQ_WORKDIR}" \
+    --input "${RNASEQ_SAMPLESHEET}" \
+    --outdir "${RNASEQ_OUTDIR}" \
+    --aligner "${RNASEQ_ALIGNER}" \
+    --skip_pseudo_alignment \
+    --save_align_intermeds \
+    --save_unaligned \
+    --skip_bigwig \
+    --extra_star_align_args "${RNASEQ_EXTRA_STAR_ALIGN_ARGS}" \
+    "${reference_args[@]}" \
+    "${extra_args[@]}"

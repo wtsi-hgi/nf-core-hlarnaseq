@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+STRANDEDNESS="${STRANDEDNESS:-auto}"
+SEQ_PLATFORM="${SEQ_PLATFORM:-ILLUMINA}"
+
+mkdir -p "$(dirname -- "${RNASEQ_SAMPLESHEET}")"
+
+if [ ! -d "${RNA_FASTQ_ROOT}" ]; then
+    echo "ERROR: RNA FASTQ directory not found: ${RNA_FASTQ_ROOT}" >&2
+    echo "Run testdata-make/05-download-na12878-rna first, or set RNA_FASTQ_ROOT." >&2
+    exit 1
+fi
+
+tmp_file="${RNASEQ_SAMPLESHEET}.tmp"
+printf 'sample,fastq_1,fastq_2,strandedness,seq_platform\n' > "${tmp_file}"
+
+pairs_found=0
+while IFS= read -r -d '' fastq_1; do
+    fastq_2="${fastq_1%_1.fastq.gz}_2.fastq.gz"
+    if [ ! -s "${fastq_2}" ]; then
+        echo "WARNING: skipping ${fastq_1}; matching read 2 FASTQ not found: ${fastq_2}" >&2
+        continue
+    fi
+
+    sample_dir=$(basename -- "$(dirname -- "${fastq_1}")")
+    sample=${sample_dir//[^A-Za-z0-9_.-]/_}
+    fastq_1_abs=$(cd -- "$(dirname -- "${fastq_1}")" && pwd -P)/$(basename -- "${fastq_1}")
+    fastq_2_abs=$(cd -- "$(dirname -- "${fastq_2}")" && pwd -P)/$(basename -- "${fastq_2}")
+
+    printf '%s,%s,%s,%s,%s\n' \
+        "${sample}" \
+        "${fastq_1_abs}" \
+        "${fastq_2_abs}" \
+        "${STRANDEDNESS}" \
+        "${SEQ_PLATFORM}" \
+        >> "${tmp_file}"
+    pairs_found=$((pairs_found + 1))
+done < <(find "${RNA_FASTQ_ROOT}" -type f -name '*_1.fastq.gz' -print0 | sort -z)
+
+if [ "${pairs_found}" -eq 0 ]; then
+    rm -f "${tmp_file}"
+    echo "ERROR: no paired *_1.fastq.gz / *_2.fastq.gz files found below ${RNA_FASTQ_ROOT}" >&2
+    exit 1
+fi
+
+mv "${tmp_file}" "${RNASEQ_SAMPLESHEET}"
+
+echo "nf-core/rnaseq samplesheet ready: ${RNASEQ_SAMPLESHEET}"
+echo "Samples: ${pairs_found}"

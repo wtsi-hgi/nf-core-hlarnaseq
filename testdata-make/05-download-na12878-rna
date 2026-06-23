@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Download GM12878 / NA12878-compatible short-read RNA-seq FASTQs from SRA.
+#
+# Default:
+#   clean ENCODE paired-end polyA RNA-seq, ENCSR000AED / GSE78551
+#
+# Optional:
+#   include older GM12878 poly(A)-selected paired-end GAII runs from GSE30400
+#
+# Requirements:
+#   conda install -c bioconda sra-tools pigz
+# or:
+#   micromamba install -c bioconda sra-tools pigz
+
+OUTDIR="data/${1:-gm12878_rnaseq_fastq}"
+THREADS="${THREADS:-8}"
+INCLUDE_OLDER="${INCLUDE_OLDER:-0}"   # set to 1 to download 4 extra older PE runs
+
+mkdir -p "${OUTDIR}"/{sra,fastq,logs}
+
+# Main recommended paired-end ENCODE polyA libraries:
+# ENCSR000AED / GSE78551
+# GM12878, polyA plus RNA-seq, stranded PE101, Illumina HiSeq 2000
+cat > "${OUTDIR}/manifest.tsv" <<'EOF'
+run_accession	geo_sample	encode_experiment	encode_library	note
+SRR3192657	GSM2072350	ENCSR000AED	ENCLB038ZZZ	GM12878 polyA PE RNA-seq biological_rep2
+SRR3192658	GSM2072351	ENCSR000AED	ENCLB037ZZZ	GM12878 polyA PE RNA-seq biological_rep1
+EOF
+
+if [[ "${INCLUDE_OLDER}" == "1" ]]; then
+  # Older but useful: GSE30400 / GSM754335 / SRX082146
+  # GM12878 derived from NA12878, poly(A)-selected RNA, paired-end GAII.
+  cat >> "${OUTDIR}/manifest.tsv" <<'EOF'
+SRR307005	GSM754335	GSE30400	SRX082146	older GM12878 polyA PE run 1
+SRR307006	GSM754335	GSE30400	SRX082146	older GM12878 polyA PE run 2
+SRR307007	GSM754335	GSE30400	SRX082146	older GM12878 polyA PE run 3
+SRR307008	GSM754335	GSE30400	SRX082146	older GM12878 polyA PE run 4
+EOF
+fi
+
+echo "Manifest:"
+column -t -s $'\t' "${OUTDIR}/manifest.tsv"
+
+echo
+echo "Checking tools..."
+echo "If needed, you can install it via conda: conda install sra-tools pigz"
+command -v prefetch >/dev/null || { echo "ERROR: prefetch not found"; exit 1; }
+command -v fasterq-dump >/dev/null || { echo "ERROR: fasterq-dump not found"; exit 1; }
+command -v pigz >/dev/null || echo "WARNING: pigz not found; will use gzip"
+
+tail -n +2 "${OUTDIR}/manifest.tsv" | while IFS=$'\t' read -r RUN GEO EXP LIB NOTE; do
+  echo
+  echo "=== ${RUN} | ${GEO} | ${EXP} | ${LIB} ==="
+
+  SAMPLE_DIR="${OUTDIR}/fastq/${RUN}_${GEO}_${LIB}"
+  mkdir -p "${SAMPLE_DIR}"
+
+  # Download .sra cache
+  prefetch \
+    --output-directory "${OUTDIR}/sra" \
+    "${RUN}" \
+    2>&1 | tee "${OUTDIR}/logs/${RUN}.prefetch.log"
+
+  # Convert to paired FASTQ.
+  # --split-files gives:
+  #   RUN_1.fastq
+  #   RUN_2.fastq
+  fasterq-dump \
+    --split-files \
+    --threads "${THREADS}" \
+    --outdir "${SAMPLE_DIR}" \
+    "${OUTDIR}/sra/${RUN}" \
+    2>&1 | tee "${OUTDIR}/logs/${RUN}.fasterq-dump.log"
+
+  # Compress FASTQs
+  if command -v pigz >/dev/null; then
+    pigz -p "${THREADS}" "${SAMPLE_DIR}"/*.fastq
+  else
+    gzip "${SAMPLE_DIR}"/*.fastq
+  fi
+
+  # Sanity check: paired-end should produce both files
+  test -s "${SAMPLE_DIR}/${RUN}_1.fastq.gz"
+  test -s "${SAMPLE_DIR}/${RUN}_2.fastq.gz"
+
+  echo "Done: ${SAMPLE_DIR}/${RUN}_{1,2}.fastq.gz"
+done
+
+echo
+echo "All downloads completed."
+echo "FASTQs are under: ${OUTDIR}/fastq/"
