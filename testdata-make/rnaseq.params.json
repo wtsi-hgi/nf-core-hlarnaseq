@@ -1,0 +1,10 @@
+{
+  "genome": "GRCh38",
+  "aligner": "star_salmon",
+  "skip_pseudo_alignment": true,
+  "save_align_intermeds": true,
+  "save_unaligned": true,
+  "skip_bigwig": true,
+  "min_mapped_reads": 5,
+  "extra_star_align_args": "--twopassMode Basic"
+}

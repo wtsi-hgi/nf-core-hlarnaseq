@@ -81,6 +81,9 @@ Download and convert the GM12878 / NA12878-compatible RNA-seq FASTQs:
 testdata-make/05-download-na12878-rna
 ```
 
+By default this writes the SRA cache, FASTQs, logs, and RNA download manifest
+under `testdata-make/data/gm12878_rnaseq_fastq/`.
+
 Then prepare an nf-core/rnaseq samplesheet from the downloaded paired FASTQs:
 
 ```bash
@@ -91,8 +94,24 @@ Run the RNA samples through nf-core/rnaseq with STAR alignment, STAR two-pass
 mode, saved unaligned reads, and pseudoalignment disabled:
 
 ```bash
-GENOME=GRCh38 testdata-make/07-run-rnaseq-star-featurecounts
+testdata-make/07-run-rnaseq-star-featurecounts
 ```
+
+The default static nf-core/rnaseq parameters are in
+`testdata-make/rnaseq.params.json`. They include the production GRCh38.111 GTF,
+STAR index, STAR alignment, saved unaligned reads, and disabled pseudoalignment.
+Override the params file with `RNASEQ_PARAMS_FILE=/path/to/params.json` if
+needed.
+
+The default Nextflow resource config is in
+`testdata-make/rnaseq.nextflow.config`. It caps process CPU requests at 8 for
+the VM and process memory requests at 48 GB. It explicitly caps
+`MAKE_TRANSCRIPTS_FASTA`, which otherwise asks RSEM for 12 threads and 72 GB.
+Override with `--rnaseq_max_cpus <N>` or `--rnaseq_max_memory '<N>.GB'` through
+`RNASEQ_EXTRA_ARGS`, or set `RNASEQ_NEXTFLOW_CONFIG=/path/to/config`.
+
+The generated samplesheet defaults to `strandedness=reverse`, matching the
+production `reverse_stranded` featureCounts setting.
 
 Alternatively, provide explicit references:
 
@@ -112,6 +131,7 @@ The rnaseq run uses the Conda profile by default and expects `nextflow` to be
 available in the active `nf-core` Conda environment. It writes under:
 
 - `data/rna/rnaseq_samplesheet.csv`
+- `data/rna/nf-core-rnaseq/rnaseq.params.json`
 - `data/rna/nf-core-rnaseq/`
 - `data/rna/work/`
 
@@ -137,11 +157,14 @@ rna_sample_id,genome_sample_id,star_bam_path,featurecounts_path,unmapped_fastq_r
 Useful overrides:
 
 - `RNA_FASTQ_ROOT`: directory containing downloaded paired FASTQs.
+- `RNA_DOWNLOAD_DIR`: output directory for `05-download-na12878-rna`; defaults to `data/gm12878_rnaseq_fastq` below `testdata-make/`.
 - `RNASEQ_SAMPLESHEET`: output path for the nf-core/rnaseq samplesheet.
 - `RNASEQ_OUTDIR`: nf-core/rnaseq output directory.
 - `RNASEQ_WORKDIR`: Nextflow work directory for the rnaseq run.
+- `RNASEQ_PARAMS_FILE`: JSON params file used for nf-core/rnaseq options; defaults to `testdata-make/rnaseq.params.json`.
+- `RNASEQ_NEXTFLOW_CONFIG`: Nextflow resource config; defaults to `testdata-make/rnaseq.nextflow.config`.
 - `RNASEQ_REVISION`: nf-core/rnaseq revision passed with `-r`.
 - `RNASEQ_EXTRA_ARGS`: additional arguments appended to the nf-core/rnaseq command.
-- `RNASEQ_EXTRA_STAR_ALIGN_ARGS`: STAR arguments, defaulting to `--twopassMode Basic`.
+- `GENOME`: optional nf-core/rnaseq iGenomes ID override.
 - `HLA_REGION`: override the HLA interval; defaults to `chr6:28510120-33480577`.
 - `GENOME_SAMPLE_ID`: genome sample ID written to `rna_samples.csv`; defaults to `NA12878`.

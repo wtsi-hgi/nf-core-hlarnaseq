@@ -10,22 +10,20 @@ require_file "${RNASEQ_SAMPLESHEET}" "nf-core/rnaseq samplesheet is required. Ru
 
 RNASEQ_PIPELINE="${RNASEQ_PIPELINE:-nf-core/rnaseq}"
 RNASEQ_PROFILE="${RNASEQ_PROFILE:-conda}"
-RNASEQ_ALIGNER="${RNASEQ_ALIGNER:-star_salmon}"
-RNASEQ_EXTRA_STAR_ALIGN_ARGS="${RNASEQ_EXTRA_STAR_ALIGN_ARGS:---twopassMode Basic}"
+RNASEQ_PARAMS_FILE="${RNASEQ_PARAMS_FILE:-${TESTDATA_MAKE_DIR}/rnaseq.params.json}"
+RNASEQ_NEXTFLOW_CONFIG="${RNASEQ_NEXTFLOW_CONFIG:-${TESTDATA_MAKE_DIR}/rnaseq.nextflow.config}"
 
 mkdir -p "${RNASEQ_OUTDIR}" "${RNASEQ_WORKDIR}"
+require_file "${RNASEQ_PARAMS_FILE}" "nf-core/rnaseq params JSON is required."
+require_file "${RNASEQ_NEXTFLOW_CONFIG}" "nf-core/rnaseq Nextflow config is required."
 
 reference_args=()
-if [ -n "${GENOME:-}" ]; then
-    reference_args+=(--genome "${GENOME}")
-elif [ -n "${FASTA:-}" ] && [ -n "${GTF:-}" ]; then
+if [ -n "${FASTA:-}" ] && [ -n "${GTF:-}" ]; then
     require_file "${FASTA}" "FASTA reference set by FASTA was not found."
     require_file "${GTF}" "GTF annotation set by GTF was not found."
     reference_args+=(--fasta "${FASTA}" --gtf "${GTF}" --igenomes_ignore)
-else
-    echo "ERROR: set GENOME, or set both FASTA and GTF, before running nf-core/rnaseq." >&2
-    echo "Example: GENOME=GRCh38 testdata-make/07-run-rnaseq-star-featurecounts" >&2
-    exit 1
+elif [ -n "${GENOME:-}" ]; then
+    reference_args+=(--genome "${GENOME}")
 fi
 
 if [ -n "${STAR_INDEX:-}" ]; then
@@ -36,11 +34,6 @@ if [ -n "${STAR_INDEX:-}" ]; then
     reference_args+=(--star_index "${STAR_INDEX}")
 fi
 
-revision_args=()
-if [ -n "${RNASEQ_REVISION:-}" ]; then
-    revision_args+=(-r "${RNASEQ_REVISION}")
-fi
-
 extra_args=()
 if [ -n "${RNASEQ_EXTRA_ARGS:-}" ]; then
     # shellcheck disable=SC2206
@@ -49,18 +42,29 @@ fi
 
 echo "Running ${RNASEQ_PIPELINE} with STAR two-pass alignment and no pseudoalignment."
 echo "Output directory: ${RNASEQ_OUTDIR}"
+echo "Params file: ${RNASEQ_PARAMS_FILE}"
+echo "Nextflow config: ${RNASEQ_NEXTFLOW_CONFIG}"
 
-nextflow run "${RNASEQ_PIPELINE}" \
-    "${revision_args[@]}" \
-    -profile "${RNASEQ_PROFILE}" \
-    -work-dir "${RNASEQ_WORKDIR}" \
-    --input "${RNASEQ_SAMPLESHEET}" \
-    --outdir "${RNASEQ_OUTDIR}" \
-    --aligner "${RNASEQ_ALIGNER}" \
-    --skip_pseudo_alignment \
-    --save_align_intermeds \
-    --save_unaligned \
-    --skip_bigwig \
-    --extra_star_align_args "${RNASEQ_EXTRA_STAR_ALIGN_ARGS}" \
-    "${reference_args[@]}" \
-    "${extra_args[@]}"
+nextflow_args=(
+    run "${RNASEQ_PIPELINE}"
+    -params-file "${RNASEQ_PARAMS_FILE}"
+    -c "${RNASEQ_NEXTFLOW_CONFIG}"
+    -profile "${RNASEQ_PROFILE}"
+    -work-dir "${RNASEQ_WORKDIR}"
+    --input "${RNASEQ_SAMPLESHEET}"
+    --outdir "${RNASEQ_OUTDIR}"
+)
+
+if [ "${#reference_args[@]}" -gt 0 ]; then
+    nextflow_args+=("${reference_args[@]}")
+fi
+
+if [ -n "${RNASEQ_REVISION:-}" ]; then
+    nextflow_args+=(-r "${RNASEQ_REVISION}")
+fi
+
+if [ -n "${RNASEQ_EXTRA_ARGS:-}" ]; then
+    nextflow_args+=("${extra_args[@]}")
+fi
+
+nextflow "${nextflow_args[@]}"

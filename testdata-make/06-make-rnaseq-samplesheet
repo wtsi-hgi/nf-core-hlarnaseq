@@ -5,7 +5,7 @@ TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 . "${TESTDATA_MAKE_DIR}/lib/config.sh"
 . "${TESTDATA_MAKE_DIR}/lib/functions.sh"
 
-STRANDEDNESS="${STRANDEDNESS:-auto}"
+STRANDEDNESS="${STRANDEDNESS:-reverse}"
 SEQ_PLATFORM="${SEQ_PLATFORM:-ILLUMINA}"
 
 mkdir -p "$(dirname -- "${RNASEQ_SAMPLESHEET}")"
