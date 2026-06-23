@@ -14,7 +14,8 @@ set -euo pipefail
 # or:
 #   micromamba install -c bioconda sra-tools pigz
 
-OUTDIR="data/${1:-gm12878_rnaseq_fastq}"
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+OUTDIR="${RNA_DOWNLOAD_DIR:-${TESTDATA_MAKE_DIR}/data/${1:-gm12878_rnaseq_fastq}}"
 THREADS="${THREADS:-8}"
 INCLUDE_OLDER="${INCLUDE_OLDER:-0}"   # set to 1 to download 4 extra older PE runs
 
