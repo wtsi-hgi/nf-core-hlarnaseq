@@ -9,6 +9,7 @@ is not intended to be committed.
 Run these scripts from an environment that provides:
 
 - `wget` or `curl`
+- `gzip`
 - `samtools`
 - standard POSIX shell utilities
 
@@ -32,6 +33,10 @@ Outputs:
 
 - `data/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa`
 - `data/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai`
+- `data/reference/GRCh38.primary_assembly.genome.fa`
+- `data/reference/GRCh38.primary_assembly.genome.fa.fai`
+- `data/reference/gencode.v<release>.primary_assembly.annotation.gtf.gz`
+- `data/reference/gencode.v<release>.primary_assembly.annotation.compat.gtf`
 - `data/wgs/NA12878.final.cram`
 - `data/wgs/NA12878.final.cram.crai`
 - `data/hla/NA12878.chr6_hla.GRCh38.bam`
@@ -61,6 +66,19 @@ Reference genome:
 
 - `http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa`
 - `http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa.fai`
+
+RNA reference genome and annotation:
+
+- `https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_<release>/GRCh38.primary_assembly.genome.fa.gz`
+- `https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_<release>/gencode.v<release>.primary_assembly.annotation.gtf.gz`
+
+By default, `00-download-reference` uses GENCODE human release 50. Override
+with `GENCODE_RELEASE=<release>` when a fixed or newer GENCODE release is
+needed. The script decompresses and indexes the primary assembly genome FASTA,
+then writes an rnaseq-compatible GTF after checking chromosome notation against
+the FASTA index. GENCODE primary assembly FASTA and GTF sequence names are
+expected to match; the compatibility step handles simple `chr` prefix and
+mitochondrial naming differences if an override introduces them.
 
 NA12878/HG001 WGS CRAM:
 
@@ -98,10 +116,10 @@ testdata-make/07-run-rnaseq-star-featurecounts
 ```
 
 The default static nf-core/rnaseq parameters are in
-`testdata-make/rnaseq.params.json`. They include the production GRCh38.111 GTF,
-STAR index, STAR alignment, saved unaligned reads, and disabled pseudoalignment.
-Override the params file with `RNASEQ_PARAMS_FILE=/path/to/params.json` if
-needed.
+`testdata-make/rnaseq.params.json`. They include STAR alignment, saved
+unaligned reads, disabled pseudoalignment, and `featurecounts_group_type=gene_id`
+for compatibility with GENCODE GTF exon attributes. Override the params file
+with `RNASEQ_PARAMS_FILE=/path/to/params.json` if needed.
 
 The default Nextflow resource config is in
 `testdata-make/rnaseq.nextflow.config`. It caps process CPU requests at 8 for
@@ -121,6 +139,11 @@ GTF=/path/to/genes.gtf \
 STAR_INDEX=/path/to/star_index \
 testdata-make/07-run-rnaseq-star-featurecounts
 ```
+
+If explicit `FASTA` and `GTF` values are not set and the GENCODE primary
+assembly files from `00-download-reference` are present, the rnaseq runner uses
+them automatically with `--igenomes_ignore`. Set `GENOME` only when you
+intentionally want nf-core/rnaseq to use an iGenomes reference instead.
 
 This script intentionally uses `nf-core/rnaseq`, not `nf-core/sarek`. The
 RNA-specific STAR, featureCounts, `--save_unaligned`, and Salmon/pseudoalignment

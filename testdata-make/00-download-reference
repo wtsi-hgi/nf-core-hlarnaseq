@@ -5,14 +5,38 @@ TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 . "${TESTDATA_MAKE_DIR}/lib/config.sh"
 . "${TESTDATA_MAKE_DIR}/lib/functions.sh"
 
+gtf_has_gene_id() {
+    gzip -cd "$1" | awk 'BEGIN { FS = "\t" } $0 !~ /^#/ && $3 == "exon" && $9 ~ /(^|; )gene_id "/ { found = 1; exit } END { exit(found ? 0 : 1) }'
+}
+
 mkdir -p "${REFERENCE_DIR}"
 
-download_file "${REFERENCE_BASE_URL}/${REFERENCE_FASTA_NAME}" "${REFERENCE_FASTA}"
+download_file "${GENCODE_BASE_URL}/${GENCODE_FASTA_GZ_NAME}" "${GENCODE_FASTA_GZ}"
+download_file "${GENCODE_BASE_URL}/${GENCODE_GTF_GZ_NAME}" "${GENCODE_GTF_GZ}"
 
-if [ -s "${REFERENCE_FAI}" ]; then
-    echo "Already present: ${REFERENCE_FAI}"
+if [ -s "${GENCODE_REFERENCE_FASTA}" ]; then
+    echo "Already present: ${GENCODE_REFERENCE_FASTA}"
 else
-    download_file "${REFERENCE_BASE_URL}/${REFERENCE_FAI_NAME}" "${REFERENCE_FAI}"
+    gzip -cd "${GENCODE_FASTA_GZ}" > "${GENCODE_REFERENCE_FASTA}.tmp"
+    mv "${GENCODE_REFERENCE_FASTA}.tmp" "${GENCODE_REFERENCE_FASTA}"
 fi
 
-echo "Reference ready: ${REFERENCE_FASTA}"
+if [ -s "${GENCODE_REFERENCE_FAI}" ]; then
+    echo "Already present: ${GENCODE_REFERENCE_FAI}"
+else
+    require_command samtools "samtools is required to index the GENCODE primary assembly FASTA."
+    samtools faidx "${GENCODE_REFERENCE_FASTA}"
+fi
+
+if gtf_has_gene_id "${GENCODE_GTF_GZ}"; then
+    :
+else
+    echo "ERROR: GENCODE GTF does not contain gene_id on exon records." >&2
+    exit 1
+fi
+
+exit
+
+echo "1000 Genomes reference ready for WGS helper scripts: ${REFERENCE_FASTA}"
+echo "GENCODE primary assembly FASTA ready for RNA: ${GENCODE_REFERENCE_FASTA}"
+echo "GENCODE primary assembly GTF ready for RNA: ${GENCODE_REFERENCE_GTF_COMPAT}"

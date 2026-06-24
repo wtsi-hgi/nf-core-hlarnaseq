@@ -8,31 +8,30 @@ TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 require_command nextflow "nextflow is required and should be available from the active nf-core Conda environment."
 require_file "${RNASEQ_SAMPLESHEET}" "nf-core/rnaseq samplesheet is required. Run testdata-make/06-make-rnaseq-samplesheet first."
 
-RNASEQ_PIPELINE="${RNASEQ_PIPELINE:-nf-core/rnaseq}"
+RNASEQ_PIPELINE="nf-core/rnaseq"
 RNASEQ_PROFILE="${RNASEQ_PROFILE:-conda}"
-RNASEQ_PARAMS_FILE="${RNASEQ_PARAMS_FILE:-${TESTDATA_MAKE_DIR}/rnaseq.params.json}"
-RNASEQ_NEXTFLOW_CONFIG="${RNASEQ_NEXTFLOW_CONFIG:-${TESTDATA_MAKE_DIR}/rnaseq.nextflow.config}"
+RNASEQ_PARAMS_FILE="${TESTDATA_MAKE_DIR}/rnaseq.params.json"
+RNASEQ_NEXTFLOW_CONFIG="${TESTDATA_MAKE_DIR}/rnaseq.nextflow.config"
+FASTA="$GENCODE_REFERENCE_FASTA"
+GTF="$GENCODE_GTF_GZ"
 
 mkdir -p "${RNASEQ_OUTDIR}" "${RNASEQ_WORKDIR}"
 require_file "${RNASEQ_PARAMS_FILE}" "nf-core/rnaseq params JSON is required."
 require_file "${RNASEQ_NEXTFLOW_CONFIG}" "nf-core/rnaseq Nextflow config is required."
 
 reference_args=()
-if [ -n "${FASTA:-}" ] && [ -n "${GTF:-}" ]; then
-    require_file "${FASTA}" "FASTA reference set by FASTA was not found."
-    require_file "${GTF}" "GTF annotation set by GTF was not found."
-    reference_args+=(--fasta "${FASTA}" --gtf "${GTF}" --igenomes_ignore)
-elif [ -n "${GENOME:-}" ]; then
-    reference_args+=(--genome "${GENOME}")
-fi
 
-if [ -n "${STAR_INDEX:-}" ]; then
-    if [ ! -e "${STAR_INDEX}" ]; then
-        echo "ERROR: STAR_INDEX does not exist: ${STAR_INDEX}" >&2
-        exit 1
-    fi
-    reference_args+=(--star_index "${STAR_INDEX}")
-fi
+require_file "${FASTA}" "FASTA reference set by FASTA was not found."
+require_file "${GTF}" "GTF annotation set by GTF was not found."
+reference_args+=(--fasta "${FASTA}" --gtf "${GTF}")
+
+#if [ -n "${STAR_INDEX:-}" ]; then
+#    if [ ! -e "${STAR_INDEX}" ]; then
+#        echo "ERROR: STAR_INDEX does not exist: ${STAR_INDEX}" >&2
+#        exit 1
+#    fi
+#    reference_args+=(--star_index "${STAR_INDEX}")
+#fi
 
 extra_args=()
 if [ -n "${RNASEQ_EXTRA_ARGS:-}" ]; then
@@ -47,6 +46,7 @@ echo "Nextflow config: ${RNASEQ_NEXTFLOW_CONFIG}"
 
 nextflow_args=(
     run "${RNASEQ_PIPELINE}"
+    -resume
     -params-file "${RNASEQ_PARAMS_FILE}"
     -c "${RNASEQ_NEXTFLOW_CONFIG}"
     -profile "${RNASEQ_PROFILE}"
