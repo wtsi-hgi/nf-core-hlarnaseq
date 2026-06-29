@@ -1,5 +1,7 @@
 {
   "aligner": "star_salmon",
+  "skip_pseudo_alignment": true,
+  "skip_biotype_qc": true,
   "igenome_ignore": true,
   "save_align_intermeds": true,
   "save_unaligned": true,

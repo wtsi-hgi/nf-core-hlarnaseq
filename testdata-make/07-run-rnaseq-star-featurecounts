@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# By default, the script runs locally using conda as a profile engine
+# To run it on the Sanger Farm, export the profile env variable and import required modules:
+# module load HGI/common/nextflow
+# module load cellgen/singularity
+# module load badger/samtools
+# export RNASEQ_PROFILE="singularity,sanger"
+
 TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 . "${TESTDATA_MAKE_DIR}/lib/config.sh"
 . "${TESTDATA_MAKE_DIR}/lib/functions.sh"
