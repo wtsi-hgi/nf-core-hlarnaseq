@@ -7,8 +7,8 @@ TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 
 require_command samtools "samtools is required to extract the HLA region."
 
-require_file "${REFERENCE_FASTA}" "Run testdata-make/00-download-reference first."
-require_file "${REFERENCE_FAI}" "Run testdata-make/00-download-reference first."
+require_file "${GENCODE_REFERENCE_FASTA}" "Run testdata-make/00-download-reference first."
+require_file "${GENCODE_REFERENCE_FAI}" "Run testdata-make/00-download-reference first."
 require_file "${NA12878_CRAM}" "Run testdata-make/01-download-na12878-wgs first."
 require_file "${NA12878_CRAI}" "Run testdata-make/01-download-na12878-wgs first."
 
@@ -17,15 +17,15 @@ mkdir -p "${HLA_DIR}"
 if [ -s "${HLA_BAM}" ]; then
     echo "Already present: ${HLA_BAM}"
 else
-    echo "Extracting ${REGION} from ${NA12878_CRAM}"
+    echo "Extracting ${HLA_REGION} from ${NA12878_CRAM}"
     rm -f "${HLA_TMP_BAM}"
     samtools view \
         -@ "${THREADS}" \
-        -T "${REFERENCE_FASTA}" \
+        -T "${GENCODE_REFERENCE_FASTA}" \
         -b \
         -o "${HLA_TMP_BAM}" \
         "${NA12878_CRAM}" \
-        "${REGION}"
+        "${HLA_REGION}"
     mv "${HLA_TMP_BAM}" "${HLA_BAM}"
 fi
 

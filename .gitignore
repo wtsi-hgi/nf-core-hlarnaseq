@@ -13,3 +13,4 @@ null/
 artifacts
 .nf-test.log
 .nf-test
+/testdata-make/hlarnases-testdata/

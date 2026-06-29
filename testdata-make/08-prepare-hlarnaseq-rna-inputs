@@ -8,7 +8,9 @@ TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 require_command samtools "samtools is required to extract HLA-region BAM files."
 
 GENOME_SAMPLE_ID="${GENOME_SAMPLE_ID:-NA12878}"
-RNASEQ_RESULTS_DIR="${RNASEQ_RESULTS_DIR:-${RNASEQ_OUTDIR}}"
+RNASEQ_RESULTS_DIR="${RNASEQ_OUTDIR}"
+RNASEQ_STAR_SALMON_DIR="${RNASEQ_RESULTS_DIR}/star_salmon"
+RNASEQ_GENE_COUNTS_MATRIX="${RNASEQ_STAR_SALMON_DIR}/salmon.merged.gene_counts.tsv"
 
 if [ ! -d "${RNASEQ_RESULTS_DIR}" ]; then
     echo "ERROR: nf-core/rnaseq results directory not found: ${RNASEQ_RESULTS_DIR}" >&2
@@ -16,56 +18,88 @@ if [ ! -d "${RNASEQ_RESULTS_DIR}" ]; then
     exit 1
 fi
 
-mkdir -p "${RNA_HLARNASEQ_DIR}" "${RNA_HLA_BAM_DIR}"
+if [ ! -d "${RNASEQ_STAR_SALMON_DIR}" ]; then
+    echo "ERROR: expected star_salmon results directory not found: ${RNASEQ_STAR_SALMON_DIR}" >&2
+    exit 1
+fi
+
+require_file "${RNASEQ_GENE_COUNTS_MATRIX}" "Salmon merged gene count matrix was not found."
+
+mkdir -p "${RNA_HLARNASEQ_DIR}" "${RNA_HLA_BAM_DIR}" "${RNA_UNMAPPED_FASTQ_DIR}" "${RNA_GENE_COUNTS_DIR}"
 
 tmp_manifest="${RNA_HLARNASEQ_MANIFEST}.tmp"
-printf 'rna_sample_id,genome_sample_id,star_bam_path,featurecounts_path,unmapped_fastq_r1,unmapped_fastq_r2\n' > "${tmp_manifest}"
+printf 'rna_sample_id,genome_sample_id,star_bam_path,gene_counts_path,unmapped_fastq_r1,unmapped_fastq_r2\n' > "${tmp_manifest}"
 
-find_featurecounts() {
-    sample=$1
-    find "${RNASEQ_RESULTS_DIR}" -type f \
-        \( -path '*/featureCounts/*' -o -path '*/featurecounts/*' \) \
-        \( -name "${sample}*.txt" -o -name "${sample}*.tsv" -o -name "${sample}*.csv" \) \
-        ! -name '*.summary' \
-        | sort | head -n 1
+sample_from_bam() {
+    bam_name=$(basename -- "$1")
+    sample=${bam_name%%.markdup.sorted.bam}
+    printf '%s\n' "${sample}"
 }
 
-find_unmapped_read() {
+extract_gene_counts() {
     sample=$1
-    read_num=$2
-    find "${RNASEQ_RESULTS_DIR}" -type f \
-        \( -path '*/star_salmon/*' -o -path '*/star_rsem/*' -o -path '*/star/*' -o -path '*/unaligned/*' -o -path '*/unmapped/*' \) \
-        \( -name "${sample}*Unmapped.out.mate${read_num}.gz" \
-           -o -name "${sample}*unmapped*_${read_num}.fastq.gz" \
-           -o -name "${sample}*unmapped*_${read_num}.fq.gz" \
-           -o -name "${sample}*unmapped*R${read_num}*.fastq.gz" \
-           -o -name "${sample}*unmapped*R${read_num}*.fq.gz" \) \
-        | sort | head -n 1
+    target_file=$2
+    tmp_file="${target_file}.tmp"
+
+    rm -f "${tmp_file}"
+    awk -v sample="${sample}" '
+        BEGIN { FS = OFS = "\t" }
+        NR == 1 {
+            for (i = 1; i <= NF; i++) {
+                if ($i == sample) {
+                    count_col = i
+                    break
+                }
+            }
+            if (!count_col) {
+                exit 2
+            }
+            print "gene_id", "read_count"
+            next
+        }
+        {
+            print $1, $count_col
+        }
+    ' "${RNASEQ_GENE_COUNTS_MATRIX}" > "${tmp_file}" || {
+        status=$?
+        rm -f "${tmp_file}"
+        if [ "${status}" -eq 2 ]; then
+            echo "ERROR: sample ${sample} was not found in ${RNASEQ_GENE_COUNTS_MATRIX}" >&2
+        else
+            echo "ERROR: failed to extract gene counts for sample ${sample}" >&2
+        fi
+        exit 1
+    }
+
+    mv "${tmp_file}" "${target_file}"
+}
+
+copy_if_needed() {
+    source_file=$1
+    target_file=$2
+
+    if [ -s "${target_file}" ]; then
+        echo "Already present: ${target_file}"
+    else
+        tmp_file="${target_file}.tmp"
+        rm -f "${tmp_file}"
+        cp -p "${source_file}" "${tmp_file}"
+        mv "${tmp_file}" "${target_file}"
+    fi
 }
 
 rows=0
-while IFS= read -r -d '' star_bam; do
-    bam_name=$(basename -- "${star_bam}")
-    sample=${bam_name%%.markdup.sorted.bam}
-    sample=${sample%%.sorted.bam}
-    sample=${sample%%.Aligned.sortedByCoord.out.bam}
-    sample=${sample%%.Aligned.out.bam}
-    sample=${sample%%.bam}
+shopt -s nullglob
+star_bams=("${RNASEQ_STAR_SALMON_DIR}"/*.markdup.sorted.bam)
+shopt -u nullglob
 
-    featurecounts_path=$(find_featurecounts "${sample}")
-    unmapped_r1=$(find_unmapped_read "${sample}" 1)
-    unmapped_r2=$(find_unmapped_read "${sample}" 2)
+for star_bam in "${star_bams[@]}"; do
+    sample=$(sample_from_bam "${star_bam}")
+    unmapped_r1="${RNASEQ_STAR_SALMON_DIR}/unmapped/${sample}.unmapped_1.fastq.gz"
+    unmapped_r2="${RNASEQ_STAR_SALMON_DIR}/unmapped/${sample}.unmapped_2.fastq.gz"
 
-    if [ -z "${featurecounts_path}" ]; then
-        echo "ERROR: featureCounts output not found for sample ${sample}" >&2
-        echo "Looked below: ${RNASEQ_RESULTS_DIR}" >&2
-        exit 1
-    fi
-    if [ -z "${unmapped_r1}" ] || [ -z "${unmapped_r2}" ]; then
-        echo "ERROR: paired unmapped FASTQs not found for sample ${sample}" >&2
-        echo "Looked below: ${RNASEQ_RESULTS_DIR}" >&2
-        exit 1
-    fi
+    require_file "${unmapped_r1}" "Unmapped read 1 FASTQ was not found for sample ${sample}."
+    require_file "${unmapped_r2}" "Unmapped read 2 FASTQ was not found for sample ${sample}."
 
     hla_bam="${RNA_HLA_BAM_DIR}/${sample}.chr6_hla.GRCh38.bam"
     if [ -s "${hla_bam}" ]; then
@@ -77,7 +111,7 @@ while IFS= read -r -d '' star_bam; do
             -@ "${THREADS}" \
             -b \
             "${star_bam}" \
-            "${REGION}" \
+            "${HLA_REGION}" \
             -o "${tmp_bam}"
         mv "${tmp_bam}" "${hla_bam}"
     fi
@@ -88,29 +122,37 @@ while IFS= read -r -d '' star_bam; do
         samtools index -@ "${THREADS}" "${hla_bam}"
     fi
 
-    star_bam_abs=$(cd -- "$(dirname -- "${star_bam}")" && pwd -P)/$(basename -- "${star_bam}")
-    featurecounts_abs=$(cd -- "$(dirname -- "${featurecounts_path}")" && pwd -P)/$(basename -- "${featurecounts_path}")
-    unmapped_r1_abs=$(cd -- "$(dirname -- "${unmapped_r1}")" && pwd -P)/$(basename -- "${unmapped_r1}")
-    unmapped_r2_abs=$(cd -- "$(dirname -- "${unmapped_r2}")" && pwd -P)/$(basename -- "${unmapped_r2}")
+    copied_unmapped_r1="${RNA_UNMAPPED_FASTQ_DIR}/${sample}.unmapped_1.fastq.gz"
+    copied_unmapped_r2="${RNA_UNMAPPED_FASTQ_DIR}/${sample}.unmapped_2.fastq.gz"
+    copy_if_needed "${unmapped_r1}" "${copied_unmapped_r1}"
+    copy_if_needed "${unmapped_r2}" "${copied_unmapped_r2}"
+
+    gene_counts="${RNA_GENE_COUNTS_DIR}/${sample}.gene_counts.tsv"
+    if [ -s "${gene_counts}" ]; then
+        echo "Already present: ${gene_counts}"
+    else
+        extract_gene_counts "${sample}" "${gene_counts}"
+    fi
+
+    hla_bam_abs=$(cd -- "$(dirname -- "${hla_bam}")" && pwd -P)/$(basename -- "${hla_bam}")
+    gene_counts_abs=$(cd -- "$(dirname -- "${gene_counts}")" && pwd -P)/$(basename -- "${gene_counts}")
+    copied_unmapped_r1_abs=$(cd -- "$(dirname -- "${copied_unmapped_r1}")" && pwd -P)/$(basename -- "${copied_unmapped_r1}")
+    copied_unmapped_r2_abs=$(cd -- "$(dirname -- "${copied_unmapped_r2}")" && pwd -P)/$(basename -- "${copied_unmapped_r2}")
 
     printf '%s,%s,%s,%s,%s,%s\n' \
         "${sample}" \
         "${GENOME_SAMPLE_ID}" \
-        "${star_bam_abs}" \
-        "${featurecounts_abs}" \
-        "${unmapped_r1_abs}" \
-        "${unmapped_r2_abs}" \
+        "${hla_bam_abs}" \
+        "${gene_counts_abs}" \
+        "${copied_unmapped_r1_abs}" \
+        "${copied_unmapped_r2_abs}" \
         >> "${tmp_manifest}"
     rows=$((rows + 1))
-done < <(find "${RNASEQ_RESULTS_DIR}" -type f \
-    \( -path '*/star_salmon/*' -o -path '*/star_rsem/*' -o -path '*/star/*' \) \
-    \( -name '*.markdup.sorted.bam' -o -name '*.sorted.bam' -o -name '*.Aligned.sortedByCoord.out.bam' -o -name '*.Aligned.out.bam' \) \
-    ! -name '*.toTranscriptome.*' \
-    -print0 | sort -z)
+done
 
 if [ "${rows}" -eq 0 ]; then
     rm -f "${tmp_manifest}"
-    echo "ERROR: no STAR genome BAM files found below ${RNASEQ_RESULTS_DIR}" >&2
+    echo "ERROR: no STAR mark-duplicate genome BAM files found at ${RNASEQ_STAR_SALMON_DIR}/*.markdup.sorted.bam" >&2
     exit 1
 fi
 
@@ -118,4 +160,6 @@ mv "${tmp_manifest}" "${RNA_HLARNASEQ_MANIFEST}"
 
 echo "hlarnaseq RNA manifest ready: ${RNA_HLARNASEQ_MANIFEST}"
 echo "HLA-region BAMs are under: ${RNA_HLA_BAM_DIR}"
+echo "Unmapped FASTQs are under: ${RNA_UNMAPPED_FASTQ_DIR}"
+echo "Gene count tables are under: ${RNA_GENE_COUNTS_DIR}"
 echo "Samples: ${rows}"
