@@ -16,7 +16,8 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlar
 workflow HLARNASEQ {
 
     take:
-    ch_samplesheet // channel: samplesheet read in from --input
+    ch_samplesheet     // channel: samplesheet read in from --input
+    ch_wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
     main:
 
     ch_versions = channel.empty()

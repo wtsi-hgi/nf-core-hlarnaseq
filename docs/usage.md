@@ -52,6 +52,29 @@ TREATMENT_REP3,AEG588A6_S6_L004_R1_001.fastq.gz,
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
+## WGS samplesheet input
+
+Optionally provide WGS BAM inputs with `--wgs_samples`:
+
+```bash
+--wgs_samples '[path to WGS samplesheet file]'
+```
+
+The WGS samplesheet must be a comma-separated file with exactly these columns:
+
+```csv title="wgs_samples.csv"
+WGS_sample_id,WGS_BAM_path,WGS_BAI_path
+NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam.bai
+```
+
+| Column          | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.   |
+| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.   |
+| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must end in `.bai`.  |
+
+Each row is validated and loaded as a separate WGS sample channel entry. Relative BAM and BAI paths are resolved from the directory containing the WGS samplesheet, the launch directory, or the pipeline project directory. An [example WGS samplesheet](../assets/wgs_samples.csv) has been provided with the pipeline.
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:
@@ -89,7 +112,7 @@ with:
 ```yaml title="params.yaml"
 input: './samplesheet.csv'
 outdir: './results/'
-genome: 'GRCh37'
+genome: 'GRCh38'
 <...>
 ```
 

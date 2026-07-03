@@ -23,6 +23,17 @@
                     "help_text": "You will need to create a design file with information about the samples in your experiment before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row. See [usage docs](https://nf-co.re/hlarnaseq/usage#samplesheet-input).",
                     "fa_icon": "fas fa-file-csv"
                 },
+                "wgs_samples": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "schema": "assets/schema_wgs_samples.json",
+                    "mimetype": "text/csv",
+                    "pattern": "^\\S+\\.csv$",
+                    "description": "Path to comma-separated file containing WGS BAM and BAI files.",
+                    "help_text": "Optional WGS samplesheet with the exact columns WGS_sample_id,WGS_BAM_path,WGS_BAI_path. All entries are mandatory. See [usage docs](https://nf-co.re/hlarnaseq/usage#wgs-samplesheet-input).",
+                    "fa_icon": "fas fa-file-csv"
+                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",

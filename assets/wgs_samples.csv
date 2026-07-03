@@ -1,0 +1,2 @@
+WGS_sample_id,WGS_BAM_path,WGS_BAI_path
+NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam.bai

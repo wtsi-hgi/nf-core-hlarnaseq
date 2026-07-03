@@ -1,0 +1,60 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/nf-core/hlarnaseq/master/assets/schema_rna_samples.json",
+    "title": "nf-core/hlarnaseq pipeline - params.rna_samples schema",
+    "description": "Schema for the RNA samples manifest provided with params.rna_samples",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "rna_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "RNA sample ID must be provided and cannot contain spaces",
+                "meta": ["id", "rna_sample_id"]
+            },
+            "genome_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "Genome sample ID must be provided and cannot contain spaces",
+                "meta": ["genome_sample_id"]
+            },
+            "star_bam_path": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bam|BAM)$",
+                "errorMessage": "STAR BAM path must be provided, cannot contain spaces and must have extension '.bam'"
+            },
+            "featurecounts_path": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(txt|tsv|csv|TXT|TSV|CSV)$",
+                "errorMessage": "featureCounts path must be provided, cannot contain spaces and must have extension '.txt', '.tsv' or '.csv'"
+            },
+            "unmapped_fastq_r1": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
+                "errorMessage": "Unmapped read 1 FastQ file must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+            },
+            "unmapped_fastq_r2": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
+                "errorMessage": "Unmapped read 2 FastQ file must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+            }
+        },
+        "required": [
+            "rna_sample_id",
+            "genome_sample_id",
+            "star_bam_path",
+            "featurecounts_path",
+            "unmapped_fastq_r1",
+            "unmapped_fastq_r2"
+        ]
+    }
+}

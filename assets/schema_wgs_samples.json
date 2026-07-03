@@ -1,0 +1,31 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/nf-core/hlarnaseq/master/assets/schema_wgs_samples.json",
+    "title": "nf-core/hlarnaseq pipeline - params.wgs_samples schema",
+    "description": "Schema for the WGS samples manifest provided with params.wgs_samples",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "WGS_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "WGS sample ID must be provided and cannot contain spaces",
+                "meta": ["id", "WGS_sample_id"]
+            },
+            "WGS_BAM_path": {
+                "type": "string",
+                "format": "file-path",
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bam|BAM)$",
+                "errorMessage": "WGS BAM path must be provided, cannot contain spaces and must have extension '.bam'"
+            },
+            "WGS_BAI_path": {
+                "type": "string",
+                "format": "file-path",
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bai|BAI)$",
+                "errorMessage": "WGS BAI path must be provided, cannot contain spaces and must have extension '.bai'"
+            }
+        },
+        "required": ["WGS_sample_id", "WGS_BAM_path", "WGS_BAI_path"]
+    }
+}

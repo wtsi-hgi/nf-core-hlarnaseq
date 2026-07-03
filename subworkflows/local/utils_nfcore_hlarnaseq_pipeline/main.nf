@@ -33,6 +33,7 @@ workflow PIPELINE_INITIALISATION {
     nextflow_cli_args //   array: List of positional nextflow CLI args
     outdir            //  string: The output directory where the results will be saved
     input             //  string: Path to input samplesheet
+    wgs_samples       //  string: Path to WGS samplesheet
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
     show_hidden       // boolean: Show hidden parameters in the help message
@@ -71,7 +72,7 @@ workflow PIPELINE_INITIALISATION {
 * Software dependencies
     https://github.com/nf-core/hlarnaseq/blob/master/CITATIONS.md
 """
-    command = "nextflow run ${workflow.manifest.name} -profile <docker/singularity/.../institute> --input samplesheet.csv --outdir <OUTDIR>"
+    command = "nextflow run ${workflow.manifest.name} -profile <docker/singularity/.../institute> --input samplesheet.csv --wgs_samples wgs_samples.csv --outdir <OUTDIR>"
 
     UTILS_NFSCHEMA_PLUGIN (
         workflow,
@@ -121,9 +122,31 @@ workflow PIPELINE_INITIALISATION {
         }
         .set { ch_samplesheet }
 
+    //
+    // Create channel from WGS samplesheet provided through params.wgs_samples
+    //
+    if (wgs_samples) {
+        validateWgsSamplesheetHeader(wgs_samples)
+
+        channel
+            .fromList(samplesheetToList(wgs_samples, "${projectDir}/assets/schema_wgs_samples.json"))
+            .map {
+                meta, WGS_BAM_path, WGS_BAI_path ->
+                    return [
+                        meta,
+                        validateWgsSamplesheetFile(wgs_samples, WGS_BAM_path, "WGS_BAM_path"),
+                        validateWgsSamplesheetFile(wgs_samples, WGS_BAI_path, "WGS_BAI_path")
+                    ]
+            }
+            .set { ch_wgs_samplesheet }
+    } else {
+        ch_wgs_samplesheet = channel.empty()
+    }
+
     emit:
-    samplesheet = ch_samplesheet
-    versions    = ch_versions
+    samplesheet     = ch_samplesheet
+    wgs_samplesheet = ch_wgs_samplesheet
+    versions        = ch_versions
 }
 
 /*
@@ -197,6 +220,47 @@ def validateInputSamplesheet(input) {
     }
 
     return [ metas[0], fastqs ]
+}
+
+//
+// Validate WGS samplesheet header
+//
+def validateWgsSamplesheetHeader(samplesheet) {
+    def expected_header = "WGS_sample_id,WGS_BAM_path,WGS_BAI_path"
+    def observed_header = file(samplesheet).readLines().find { line -> line.trim() }?.trim()
+
+    if (observed_header != expected_header) {
+        error("Please check WGS samplesheet -> Header must be exactly: ${expected_header}")
+    }
+}
+
+//
+// Validate and resolve WGS samplesheet file entries
+//
+def validateWgsSamplesheetFile(samplesheet, entry, field_name) {
+    def entry_path = file(entry)
+
+    if (entry_path.isAbsolute()) {
+        if (entry_path.exists()) {
+            return entry_path
+        }
+        error("Please check WGS samplesheet -> ${field_name} does not exist: ${entry}")
+    }
+
+    def candidate_paths = [
+        file(samplesheet).parent.resolve(entry).normalize(),
+        file("${workflow.launchDir}/${entry}").normalize(),
+        file("${projectDir}/${entry}").normalize()
+    ]
+
+    def resolved_path = candidate_paths.find { candidate -> candidate.exists() }
+
+    if (!resolved_path) {
+        def searched_paths = candidate_paths.collect { candidate -> candidate.toString() }.unique().join(", ")
+        error("Please check WGS samplesheet -> ${field_name} does not exist: ${entry}. Searched: ${searched_paths}")
+    }
+
+    return resolved_path
 }
 //
 // Get attribute from genome config file e.g. fasta
