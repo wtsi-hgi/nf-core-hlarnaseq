@@ -50,6 +50,16 @@ echo "== Environment =="
     command -v nf-core || true
     command -v nf-test || true
     command -v pre-commit || true
+    if [[ -x "./run_tests_remote" ]]; then
+        echo "./run_tests_remote"
+        echo "Remote host: ${REMOTE_HOST:-gz3vm}"
+        echo "Remote root: ${REMOTE_ROOT:-/home/ubuntu/temprun}"
+        echo "Remote profile: ${REMOTE_PROFILE:-<none>}"
+        echo "Remote Conda env: ${REMOTE_CONDA_ENV:-nf-core}"
+        echo "Download remote results: ${DOWNLOAD_RESULTS:-0}"
+    else
+        echo "run_tests_remote: not executable or missing"
+    fi
     echo "Container validation: skipped by early-stage Conda policy"
 } | tee "${RUN_DIR}/environment.log"
 
@@ -65,21 +75,20 @@ else
     skip_check "nf-test" "nf-test is not installed" "nf-test"
 fi
 
-if command -v nextflow >/dev/null 2>&1; then
-    run_check "Nextflow test profile" "nextflow-test" \
-        nextflow run . -profile test --outdir "${RUN_DIR}/nextflow-test"
+if [[ -x "./run_tests_remote" ]]; then
+    run_check "Remote Nextflow testdata" "remote-nextflow-testdata" \
+        env DOWNLOAD_RESULTS="${DOWNLOAD_RESULTS:-0}" ./run_tests_remote
 
-    run_check "Nextflow debug,test profile" "nextflow-debug-test" \
-        nextflow run . -profile debug,test --outdir "${RUN_DIR}/nextflow-debug-test"
-
-    skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
-    skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
+    skip_check "Local Nextflow test profile" "testdata smoke validation is run on the remote VM via ./run_tests_remote" "nextflow-test"
+    skip_check "Local Nextflow debug,test profile" "testdata smoke validation is run on the remote VM via ./run_tests_remote" "nextflow-debug-test"
 else
-    skip_check "Nextflow test profile" "nextflow is not installed" "nextflow-test"
-    skip_check "Nextflow debug,test profile" "nextflow is not installed" "nextflow-debug-test"
-    skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
-    skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
+    skip_check "Remote Nextflow testdata" "./run_tests_remote is missing or not executable" "remote-nextflow-testdata"
+    skip_check "Local Nextflow test profile" "remote testdata validation is required; local fallback was not requested" "nextflow-test"
+    skip_check "Local Nextflow debug,test profile" "remote testdata validation is required; local fallback was not requested" "nextflow-debug-test"
 fi
+
+skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
+skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
 
 if command -v pre-commit >/dev/null 2>&1; then
     run_check "pre-commit" "pre-commit" pre-commit run --all-files

@@ -4,8 +4,12 @@ Use these checks when the change cannot be fully proven by automated tests.
 
 ## Pipeline Smoke
 
-- Run `nextflow run . -profile test --outdir artifacts/validation/nextflow-test`.
-- Run `nextflow run . -profile debug,test --outdir artifacts/validation/nextflow-debug-test`.
+- Run `./run_tests_remote` to execute `pipeline_testdata_run.sh` on the configured remote VM.
+- Use `DRY_RUN=1 ./run_tests_remote` to confirm the sync and remote run paths before executing when needed.
+- By default, remote validation downloads only lightweight run evidence and skips `results/` and `nextflow.workdir/`.
+- Use `DOWNLOAD_RESULTS=1 ./run_tests_remote` only when result file inspection is necessary.
+- Record the downloaded `artifacts/remote-testdata-run/<timestamp>/` path in the validation report.
+- Local `nextflow run . -profile test` checks are a fallback only when the user asks for local-only validation or remote access is blocked.
 - Do not run container validation during the current early-stage development policy; record container checks as intentional policy skips.
 
 ## Schema and Samplesheet
