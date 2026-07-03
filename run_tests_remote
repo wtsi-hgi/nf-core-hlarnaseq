@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+# Sync this repository to a remote VM, run the testdata Nextflow command there,
+# and download the remote run directory. SSH is expected to be preconfigured.
+
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage:
+  run_tests_remote [nextflow arguments...]
+
+Examples:
+  ./run_tests_remote
+  ./run_tests_remote -resume
+  DRY_RUN=1 ./run_tests_remote
+  REMOTE_HOST=my-vm REMOTE_PROFILE=conda ./run_tests_remote
+
+Environment:
+  REMOTE_HOST       SSH host alias. Default: gz3vm
+  REMOTE_ROOT       Remote parent directory for the synced repo. Default: /home/ubuntu/temprun
+  REMOTE_PROFILE    Optional Nextflow profile used by pipeline_testdata_run.sh. Default: unset
+  REMOTE_CONDA_ENV  Optional Conda environment to activate on the VM. Default: nf-core
+  DRY_RUN           Print resolved paths and command without syncing or running. Default: 0
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+remote_host="${REMOTE_HOST:-gz3vm}"
+remote_root="${REMOTE_ROOT:-/home/ubuntu/temprun}"
+remote_profile="${REMOTE_PROFILE:-}"
+remote_conda_env="${REMOTE_CONDA_ENV:-nf-core}"
+dry_run="${DRY_RUN:-0}"
+
+script_path="$(realpath "${BASH_SOURCE[0]}")"
+repo_root="$(cd "$(dirname "${script_path}")" && pwd)"
+
+if [[ ! -f "${repo_root}/pipeline_testdata_run.sh" || ! -f "${repo_root}/nextflow.config" ]]; then
+    if git_root="$(git -C "${repo_root}" rev-parse --show-toplevel 2>/dev/null)"; then
+        repo_root="${git_root}"
+    fi
+fi
+
+if [[ ! -f "${repo_root}/pipeline_testdata_run.sh" || ! -f "${repo_root}/nextflow.config" ]]; then
+    echo "Failed to locate nf-core/hlarnaseq repo root from ${script_path}" >&2
+    echo "Resolved candidate was: ${repo_root}" >&2
+    exit 2
+fi
+
+repo_name="$(basename "${repo_root}")"
+remote_repo="${remote_root}/${repo_name}"
+run_id="$(date +%Y%m%d_%H%M%S)"
+local_run_dir="${repo_root}/artifacts/remote-testdata-run/${run_id}"
+remote_run_dir="${remote_repo}/artifacts/remote-testdata-run/${run_id}"
+nextflow_args=("$@")
+nextflow_args_display="${nextflow_args[*]-}"
+remote_profile_arg="${remote_profile:-__NFCORE_HLARNASEQ_EMPTY__}"
+remote_conda_env_arg="${remote_conda_env:-__NFCORE_HLARNASEQ_EMPTY__}"
+
+echo "Syncing ${repo_root} to ${remote_host}:${remote_repo}"
+if [[ "${dry_run}" == "1" || "${dry_run}" == "true" ]]; then
+    echo "Dry run only; no SSH, rsync, or Nextflow command will be executed."
+    echo "Remote run dir: ${remote_run_dir}"
+    echo "Local download dir: ${local_run_dir}"
+    echo "Remote command: REMOTE_CONDA_ENV=${remote_conda_env} PROFILE=${remote_profile} RUN_DIR=${remote_run_dir} ./pipeline_testdata_run.sh ${nextflow_args_display}"
+    exit 0
+fi
+
+ssh "${remote_host}" mkdir -p "${remote_repo}"
+
+rsync -az \
+    --exclude ".git/" \
+    --exclude ".idea/" \
+    --exclude ".nextflow/" \
+    --exclude ".venv/" \
+    --exclude "__pycache__/" \
+    --exclude "work/" \
+    --exclude "artifacts/testdata-run/" \
+    --exclude "artifacts/remote-testdata-run/" \
+    --exclude "artifacts/validation/" \
+    "${repo_root}/" "${remote_host}:${remote_repo}/"
+
+echo "Running on ${remote_host}: ./pipeline_testdata_run.sh ${nextflow_args_display}"
+ssh "${remote_host}" mkdir -p "${remote_run_dir}"
+
+if ssh "${remote_host}" bash -s -- "${remote_repo}" "${remote_run_dir}" "${remote_profile_arg}" "${remote_conda_env_arg}" ${nextflow_args[@]+"${nextflow_args[@]}"} <<'REMOTE'
+set -euo pipefail
+
+remote_repo="$1"
+remote_run_dir="$2"
+remote_profile="$3"
+remote_conda_env="$4"
+shift 4
+if [[ "${remote_profile}" == "__NFCORE_HLARNASEQ_EMPTY__" ]]; then
+    remote_profile=""
+fi
+if [[ "${remote_conda_env}" == "__NFCORE_HLARNASEQ_EMPTY__" ]]; then
+    remote_conda_env=""
+fi
+nextflow_args=("$@")
+nextflow_args_display="${nextflow_args[*]-}"
+
+mkdir -p "${remote_run_dir}"
+cd "${remote_repo}" || exit 2
+
+log_file="${remote_run_dir}/pipeline_testdata_run.remote.log"
+
+{
+    echo "Remote host: $(hostname)"
+    echo "Remote repo: ${remote_repo}"
+    echo "Remote run dir: ${remote_run_dir}"
+    echo "Remote profile: ${remote_profile}"
+    echo "Remote Conda env: ${remote_conda_env:-<none>}"
+    echo "Started: $(date -Is)"
+    echo "Command: PROFILE=${remote_profile} RUN_DIR=${remote_run_dir} ./pipeline_testdata_run.sh ${nextflow_args_display}"
+    echo
+
+    if [[ -n "${remote_conda_env}" ]]; then
+        conda_exe=""
+        if command -v conda >/dev/null 2>&1; then
+            conda_exe="$(command -v conda)"
+        elif [[ -x "${HOME}/miniforge3/bin/conda" ]]; then
+            conda_exe="${HOME}/miniforge3/bin/conda"
+        elif [[ -x "${HOME}/miniconda3/bin/conda" ]]; then
+            conda_exe="${HOME}/miniconda3/bin/conda"
+        elif [[ -x "${HOME}/mambaforge/bin/conda" ]]; then
+            conda_exe="${HOME}/mambaforge/bin/conda"
+        fi
+
+        if [[ -n "${conda_exe}" ]]; then
+            eval "$("${conda_exe}" shell.bash hook)"
+            conda activate "${remote_conda_env}"
+        else
+            echo "Conda is not available on PATH; cannot activate ${remote_conda_env}" >&2
+            exit 2
+        fi
+    fi
+
+    PROFILE="${remote_profile}" \
+    RUN_DIR="${remote_run_dir}" \
+    OUTDIR="${remote_run_dir}/results" \
+    NEXTFLOW_WORKDIR="${remote_run_dir}/nextflow.workdir" \
+    NEXTFLOW_LOG="${remote_run_dir}/testdata.log" \
+        ./pipeline_testdata_run.sh ${nextflow_args[@]+"${nextflow_args[@]}"}
+    status="$?"
+
+    echo
+    echo "Finished: $(date -Is)"
+    echo "Exit status: ${status}"
+    exit "${status}"
+} 2>&1 | tee "${log_file}"
+
+exit "${PIPESTATUS[0]}"
+REMOTE
+then
+    run_status=0
+else
+    run_status="$?"
+fi
+
+echo "Downloading remote run directory to ${local_run_dir}"
+mkdir -p "${local_run_dir}"
+if ! rsync -az "${remote_host}:${remote_run_dir}/" "${local_run_dir}/"; then
+    echo "Failed to download run directory from ${remote_host}:${remote_run_dir}" >&2
+    exit 2
+fi
+
+echo "Remote run artifacts downloaded:"
+find "${local_run_dir}" -maxdepth 2 -type f -print
+
+exit "${run_status}"

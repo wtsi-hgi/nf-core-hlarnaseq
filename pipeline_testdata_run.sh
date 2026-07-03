@@ -1,12 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+    cat <<'EOF'
+Usage:
+  pipeline_testdata_run.sh [nextflow arguments...]
+
+Runs the local nf-core/hlarnaseq testdata through Nextflow.
+
+Environment:
+  PROFILE            Optional Nextflow profile to use. Default: unset
+  RUN_DIR            Directory for generated inputs, logs, work, and default results.
+                     Default: <repo>/artifacts/testdata-run
+  OUTDIR             Nextflow --outdir. Default: <RUN_DIR>/results
+  NEXTFLOW_WORKDIR   Nextflow work directory. Default: <RUN_DIR>/nextflow.workdir
+  NEXTFLOW_LOG       Nextflow log path. Default: <RUN_DIR>/testdata.log
+  WGS_SAMPLESHEET    WGS samplesheet path. Default: <repo>/assets/wgs_samples.csv
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUN_DIR="${ROOT_DIR}/artifacts/testdata-run"
+RUN_DIR="${RUN_DIR:-${ROOT_DIR}/artifacts/testdata-run}"
 INPUT_SAMPLESHEET="${RUN_DIR}/input.csv"
 OUTDIR="${OUTDIR:-${RUN_DIR}/results}"
-NEXTFLOW_WORKDIR="${RUN_DIR}/nextflow.workdir"
+NEXTFLOW_WORKDIR="${NEXTFLOW_WORKDIR:-${RUN_DIR}/nextflow.workdir}"
+NEXTFLOW_LOG="${NEXTFLOW_LOG:-${RUN_DIR}/testdata.log}"
 WGS_SAMPLESHEET="${WGS_SAMPLESHEET:-${ROOT_DIR}/assets/wgs_samples.csv}"
+PROFILE="${PROFILE:-}"
 
 mkdir -p "${RUN_DIR}"
 
@@ -17,9 +42,21 @@ CSV
 
 cd "${ROOT_DIR}"
 
-nextflow -log "${RUN_DIR}/testdata.log" \
-     run . \
-    -profile singularity \
+echo "Running nf-core/hlarnaseq testdata"
+echo "Profile: ${PROFILE:-<none>}"
+echo "Run dir: ${RUN_DIR}"
+echo "Outdir: ${OUTDIR}"
+echo "Work dir: ${NEXTFLOW_WORKDIR}"
+echo "Log: ${NEXTFLOW_LOG}"
+
+profile_args=()
+if [[ -n "${PROFILE}" ]]; then
+    profile_args=(-profile "${PROFILE}")
+fi
+
+nextflow -log "${NEXTFLOW_LOG}" \
+    run . \
+    "${profile_args[@]}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
     --input "${INPUT_SAMPLESHEET}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \

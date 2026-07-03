@@ -1,3 +1,25 @@
+# <repo>/.codex/config.toml
+# Use this line to remove all sandbox restrictions (for agent testign only)
+# default_permissions = ":danger-full-access"
+
+# The custom permissions that allow localhost port binding a
+# and runnign data on the VM
+default_permissions = "nextflow"
+
+[permissions.nextflow]
+extends = ":workspace"
+
+[permissions.nextflow.network]
+enabled = true
+allow_local_binding = true
+
+[permissions.nextflow.network.domains]
+"localhost" = "allow"
+"127.0.0.1" = "allow"
+"gz3vm"     = "allow"
+"172.27.21.152" = "allow"
+
+
 [features]
 multi_agent = true
 
