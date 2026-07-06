@@ -205,6 +205,7 @@ workflow PIPELINE_COMPLETION {
 //
 def validateInputParameters() {
     genomeExistsError()
+    hlalaGraphDirExistsError()
 }
 
 //
@@ -285,6 +286,19 @@ def genomeExistsError() {
             "  ${params.genomes.keySet().join(", ")}\n" +
             "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
         error(error_string)
+    }
+}
+
+//
+// Exit pipeline if WGS HLA-LA inputs are provided without a prepared graph directory
+//
+def hlalaGraphDirExistsError() {
+    if (params.wgs_samples && !params.hlala_graph_dir) {
+        error("Please provide --hlala_graph_dir when using --wgs_samples so HLA-LA can find its prepared graph directory.")
+    }
+
+    if (params.wgs_samples && !file(params.hlala_graph_dir).exists()) {
+        error("Please check --hlala_graph_dir -> Directory does not exist: ${params.hlala_graph_dir}")
     }
 }
 //

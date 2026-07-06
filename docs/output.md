@@ -12,12 +12,25 @@ The directories listed below will be created in the results directory after the 
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
 
-
+- [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
+### HLA-LA
 
+<details markdown="1">
+<summary>Output files</summary>
 
+- `hlala/`
+  - `HLA-LA_combined.csv`: Combined HLA-LA G-group allele calls across all WGS samples, with columns `sample_id,HLA_allele`.
+  - `<sample_id>/R1_bestguess_G.txt`: Per-sample HLA-LA G-group best guess file.
+  - `<sample_id>/R1_bestguess.txt`: Per-sample HLA-LA best guess file, when produced by HLA-LA.
+  - `<sample_id>/hla.tar.gz`: Archive of the per-sample HLA-LA `hla/` result directory, when produced.
+  - `<sample_id>/hlala.log`: HLA-LA run log for the sample.
 
+</details>
+
+HLA-LA runs only when `--wgs_samples` is provided.
+The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` column and extracts allele calls from column 3 of each `R1_bestguess_G.txt` after the header.
 
 ### Pipeline information
 

@@ -1,0 +1,2 @@
+sample,fastq_1,fastq_2
+SAMPLE_PAIRED_END,/Users/gz3/programming/nf-core-hlarnaseq/tests/fixtures/fastq/SAMPLE_PAIRED_END_R1.fastq.gz,/Users/gz3/programming/nf-core-hlarnaseq/tests/fixtures/fastq/SAMPLE_PAIRED_END_R2.fastq.gz

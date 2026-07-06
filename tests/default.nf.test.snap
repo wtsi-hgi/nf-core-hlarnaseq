@@ -3,7 +3,8 @@
         "content": [
             null,
             [
-                "pipeline_info"
+                "pipeline_info",
+                "pipeline_info/nf_core_hlarnaseq_software_versions.yml"
             ],
             [
                 

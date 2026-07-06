@@ -10,9 +10,9 @@
 
 ## Pipeline tools
 
+## [HLA-LA](https://doi.org/10.1093/bioinformatics/btz235)
 
-
-
+> Dilthey AT, Mentzer AJ, Carapito R, Cutland C, Cereb N, Madhi SA, Rhie A, Koren S, Bahram S, McVean G, Phillippy AM. HLA\*LA-HLA typing from linearly projected graph alignments. Bioinformatics. 2019 Nov 1;35(21):4394-4396. doi: 10.1093/bioinformatics/btz235.
 
 ## Software packaging/containerisation tools
 

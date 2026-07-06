@@ -6,6 +6,7 @@
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlarnaseq_pipeline'
+include { HLALA                  } from '../subworkflows/local/hlala'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -21,6 +22,13 @@ workflow HLARNASEQ {
     main:
 
     ch_versions = channel.empty()
+    ch_hlala_combined = channel.empty()
+
+    if (params.wgs_samples) {
+        HLALA(ch_wgs_samplesheet)
+        ch_versions = ch_versions.mix(HLALA.out.versions)
+        ch_hlala_combined = HLALA.out.combined_csv
+    }
 
     //
     // Collate and save software versions
@@ -54,6 +62,7 @@ workflow HLARNASEQ {
 
     emit:
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
+    hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.csv) ]
 
 }
 

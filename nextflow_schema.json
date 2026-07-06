@@ -71,6 +71,21 @@
                     "help_text": "This parameter is *mandatory* if `--genome` is not specified. If you don't have a BWA index available this will be generated for you automatically. Combine with `--save_reference` to save BWA index for future runs.",
                     "fa_icon": "far fa-file-code"
                 },
+                "hlala_graph": {
+                    "type": "string",
+                    "default": "PRG_MHC_GRCh38_withIMGT",
+                    "description": "HLA-LA graph name passed to `HLA-LA.pl --graph`.",
+                    "help_text": "Graph name to use for WGS HLA typing with HLA-LA. The default matches the standard GRCh38 graph used by the standalone prototype scripts.",
+                    "fa_icon": "fas fa-project-diagram"
+                },
+                "hlala_graph_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "exists": true,
+                    "description": "Path to the prepared HLA-LA graph parent directory.",
+                    "help_text": "Required when `--wgs_samples` is provided. This path is passed to `HLA-LA.pl --customGraphDir` and must contain the prepared graph selected with `--hlala_graph`.",
+                    "fa_icon": "fas fa-folder-tree"
+                },
                 "igenomes_ignore": {
                     "type": "boolean",
                     "description": "Do not load the iGenomes reference config.",

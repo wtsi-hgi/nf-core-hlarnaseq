@@ -67,13 +67,28 @@ WGS_sample_id,WGS_BAM_path,WGS_BAI_path
 NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam.bai
 ```
 
-| Column          | Description                                                                 |
-| --------------- | --------------------------------------------------------------------------- |
-| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.   |
-| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.   |
-| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must end in `.bai`.  |
+| Column          | Description                                                                |
+| --------------- | -------------------------------------------------------------------------- |
+| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.  |
+| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.  |
+| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must end in `.bai`. |
 
 Each row is validated and loaded as a separate WGS sample channel entry. Relative BAM and BAI paths are resolved from the directory containing the WGS samplesheet, the launch directory, or the pipeline project directory. An [example WGS samplesheet](../assets/wgs_samples.csv) has been provided with the pipeline.
+
+When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.csv`.
+HLA-LA, samtools, and the prepared HLA-LA graph data must already be available in the active runtime environment.
+The pipeline does not download, prepare, or package HLA-LA graph data in this early development stage.
+
+Provide the parent directory containing the prepared graph with `--hlala_graph_dir`.
+The graph name defaults to `PRG_MHC_GRCh38_withIMGT` and can be changed with `--hlala_graph`.
+
+```bash
+nextflow run nf-core/hlarnaseq \
+    --input ./samplesheet.csv \
+    --wgs_samples ./wgs_samples.csv \
+    --hlala_graph_dir /path/to/HLA-LA/graphs \
+    --outdir ./results
+```
 
 ## Running the pipeline
 
