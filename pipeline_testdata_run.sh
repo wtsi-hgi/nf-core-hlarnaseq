@@ -31,6 +31,7 @@ OUTDIR="${OUTDIR:-${RUN_DIR}/results}"
 NEXTFLOW_WORKDIR="${NEXTFLOW_WORKDIR:-${RUN_DIR}/nextflow.workdir}"
 NEXTFLOW_LOG="${NEXTFLOW_LOG:-${RUN_DIR}/testdata.log}"
 WGS_SAMPLESHEET="${WGS_SAMPLESHEET:-${ROOT_DIR}/assets/wgs_samples.csv}"
+HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
 
 mkdir -p "${RUN_DIR}"
@@ -58,7 +59,9 @@ nextflow -log "${NEXTFLOW_LOG}" \
     run . \
     "${profile_args[@]}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
+    -resume \
     --input "${INPUT_SAMPLESHEET}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \
+    --hlala_graph_dir "$HLALA_GRAPHS"  \
     --outdir "${OUTDIR}" \
     "$@"

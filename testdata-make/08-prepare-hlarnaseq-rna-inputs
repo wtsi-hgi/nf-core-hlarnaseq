@@ -11,6 +11,7 @@ GENOME_SAMPLE_ID="${GENOME_SAMPLE_ID:-NA12878}"
 RNASEQ_RESULTS_DIR="${RNASEQ_OUTDIR}"
 RNASEQ_STAR_SALMON_DIR="${RNASEQ_RESULTS_DIR}/star_salmon"
 RNASEQ_GENE_COUNTS_MATRIX="${RNASEQ_STAR_SALMON_DIR}/salmon.merged.gene_counts.tsv"
+UNMAPPED_FASTQ_READ_LIMIT=5000
 
 if [ ! -d "${RNASEQ_RESULTS_DIR}" ]; then
     echo "ERROR: nf-core/rnaseq results directory not found: ${RNASEQ_RESULTS_DIR}" >&2
@@ -74,7 +75,7 @@ extract_gene_counts() {
     mv "${tmp_file}" "${target_file}"
 }
 
-copy_if_needed() {
+write_limited_fastq_if_needed() {
     source_file=$1
     target_file=$2
 
@@ -83,7 +84,21 @@ copy_if_needed() {
     else
         tmp_file="${target_file}.tmp"
         rm -f "${tmp_file}"
-        cp -p "${source_file}" "${tmp_file}"
+        set +o pipefail
+        gzip -cd "${source_file}" \
+            | awk -v read_limit="${UNMAPPED_FASTQ_READ_LIMIT}" 'NR <= read_limit * 4 { print } NR == read_limit * 4 { exit }' \
+            | gzip -c > "${tmp_file}"
+        pipeline_status=("${PIPESTATUS[@]}")
+        set -o pipefail
+
+        if { [ "${pipeline_status[0]}" -ne 0 ] && [ "${pipeline_status[0]}" -ne 141 ]; } \
+            || [ "${pipeline_status[1]}" -ne 0 ] \
+            || [ "${pipeline_status[2]}" -ne 0 ]; then
+            rm -f "${tmp_file}"
+            echo "ERROR: failed to write limited FASTQ from ${source_file}" >&2
+            exit 1
+        fi
+
         mv "${tmp_file}" "${target_file}"
     fi
 }
@@ -124,8 +139,8 @@ for star_bam in "${star_bams[@]}"; do
 
     copied_unmapped_r1="${RNA_UNMAPPED_FASTQ_DIR}/${sample}.unmapped_1.fastq.gz"
     copied_unmapped_r2="${RNA_UNMAPPED_FASTQ_DIR}/${sample}.unmapped_2.fastq.gz"
-    copy_if_needed "${unmapped_r1}" "${copied_unmapped_r1}"
-    copy_if_needed "${unmapped_r2}" "${copied_unmapped_r2}"
+    write_limited_fastq_if_needed "${unmapped_r1}" "${copied_unmapped_r1}"
+    write_limited_fastq_if_needed "${unmapped_r2}" "${copied_unmapped_r2}"
 
     gene_counts="${RNA_GENE_COUNTS_DIR}/${sample}.gene_counts.tsv"
     if [ -s "${gene_counts}" ]; then
