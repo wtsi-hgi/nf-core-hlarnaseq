@@ -12,7 +12,7 @@ workflow HLALA {
 
     ch_bestguess_g = HLALA_RUN.out.bestguess_g
         .map { meta, bestguess_g -> [ meta.id, bestguess_g ] }
-        .collect()
+        .collect(flat: false)
         .map { rows ->
             [
                 rows.collect { row -> row[0] },

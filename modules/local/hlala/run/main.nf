@@ -28,10 +28,25 @@ process HLALA_RUN {
     script:
     """
     sample_id="${meta.id}"
+    HLALA_CONDA_ENV="hla-la"
 
-    ln -sf "${bai}" "${bam}.bai"
+    command -v conda >/dev/null 2>&1 || {
+        echo "ERROR: conda is required to run HLA-LA from the \${HLALA_CONDA_ENV} environment" >&2
+        exit 127
+    }
 
-    HLA-LA.pl \\
+    conda run -n "\${HLALA_CONDA_ENV}" bash -lc 'command -v HLA-LA.pl >/dev/null 2>&1' || {
+        echo "ERROR: HLA-LA.pl is not available in the \${HLALA_CONDA_ENV} Conda environment" >&2
+        exit 127
+    }
+
+    if [[ "${bai}" != "${bam}.bai" ]]; then
+        ln -sf "${bai}" "${bam}.bai"
+    fi
+
+    mkdir -p hlala_work
+
+    conda run -n "\${HLALA_CONDA_ENV}" HLA-LA.pl \\
         --BAM "${bam}" \\
         --graph "${params.hlala_graph}" \\
         --customGraphDir "${params.hlala_graph_dir}" \\
@@ -58,7 +73,7 @@ process HLALA_RUN {
     cp hlala.log "\${sample_id}/hlala.log"
 
     set +e
-    hlala_version=\$(HLA-LA.pl --version 2>&1 | head -n 1)
+    hlala_version=\$(conda run -n "\${HLALA_CONDA_ENV}" HLA-LA.pl --version 2>&1 | head -n 1)
     set -e
     if [[ -z "\${hlala_version}" ]] || [[ "\${hlala_version}" == *"Usage"* ]]; then
         hlala_version="unknown"
