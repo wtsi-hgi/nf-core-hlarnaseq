@@ -1,8 +1,19 @@
 {
     "-profile test": {
         "content": [
-            null,
+            {
+                "ARCASHLA_EXTRACT": {
+                    "samtools": 1.24
+                },
+                "Workflow": {
+                    "nf-core/hlarnaseq": "v1.0.0dev"
+                }
+            },
             [
+                "arcashla",
+                "arcashla/extracted",
+                "arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz",
+                "arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz",
                 "pipeline_info",
                 "pipeline_info/nf_core_hlarnaseq_software_versions.yml"
             ],
@@ -10,10 +21,10 @@
                 
             ]
         ],
-        "timestamp": "2026-07-01T15:09:27.501797",
+        "timestamp": "2026-07-22T13:12:41.374984155",
         "meta": {
             "nf-test": "0.9.5",
-            "nextflow": "26.04.0"
+            "nextflow": "26.04.4"
         }
     }
 }

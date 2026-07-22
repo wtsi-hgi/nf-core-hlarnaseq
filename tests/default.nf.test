@@ -19,14 +19,73 @@ nextflow_pipeline {
             def stable_path = getAllFilesFromDir(params.outdir, ignoreFile: 'tests/.nftignore')
             assertAll(
                 { assert workflow.success},
+                { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz").size() > 0 },
+                { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz").size() > 0 },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
-                    removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_mqc_versions.yml"),
+                    removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
                     // All stable path name, with a relative path
                     stable_name,
                     // All files with stable contents
                     stable_path
                 ).match() }
+            )
+        }
+    }
+
+    test("reject duplicate RNA IDs") {
+
+        config "../conf/test.config"
+
+        when {
+            params {
+                rna_samples = "$projectDir/tests/fixtures/rna_samples_duplicate.csv"
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.failed },
+                { assert workflow.stdout.any { it.contains('Duplicate rna_id values are not allowed: RNA_SAMPLE_1') } }
+            )
+        }
+    }
+
+    test("reject invalid RNA header") {
+
+        config "../conf/test.config"
+
+        when {
+            params {
+                rna_samples = "$projectDir/tests/fixtures/rna_samples_bad_header.csv"
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.failed },
+                { assert workflow.stdout.any { it.contains('Header must be exactly: rna_id,bam,bai,unpaired_r1,unpaired_r2') } }
+            )
+        }
+    }
+
+    test("require HLA region") {
+
+        config "../conf/test.config"
+
+        when {
+            params {
+                hla_region = null
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.failed },
+                { assert workflow.stdout.any { it.contains('Validation of pipeline parameters failed!') } }
             )
         }
     }

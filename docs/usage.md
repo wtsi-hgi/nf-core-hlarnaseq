@@ -8,49 +8,35 @@
 
 <!-- TODO nf-core: Add documentation about anything specific to running your pipeline. For general topics, please point to (and add to) the main nf-core website. -->
 
-## Samplesheet input
+## RNA samplesheet input
 
-You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row as shown in the examples below.
+Provide the required RNA manifest with `--rna_samples` and the region to extract with `--hla_region`:
 
 ```bash
---input '[path to samplesheet file]'
+--rna_samples '[path to RNA samplesheet]' \
+--hla_region 'chr6:28500000-33400000'
 ```
 
-### Multiple runs of the same sample
+The CSV header must exactly match the following five columns:
 
-The `sample` identifiers have to be the same when you have re-sequenced the same sample more than once e.g. to increase sequencing depth. The pipeline will concatenate the raw reads before performing any downstream analysis. Below is an example for the same sample sequenced across 3 lanes:
-
-```csv title="samplesheet.csv"
-sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
-CONTROL_REP1,AEG588A1_S1_L003_R1_001.fastq.gz,AEG588A1_S1_L003_R2_001.fastq.gz
-CONTROL_REP1,AEG588A1_S1_L004_R1_001.fastq.gz,AEG588A1_S1_L004_R2_001.fastq.gz
+```csv title="rna_samples.csv"
+rna_id,bam,bai,unpaired_r1,unpaired_r2
+RNA_SAMPLE_1,/path/to/RNA_SAMPLE_1.bam,/path/to/RNA_SAMPLE_1.bam.bai,/path/to/RNA_SAMPLE_1.unpaired_1.fastq.gz,/path/to/RNA_SAMPLE_1.unpaired_2.fastq.gz
 ```
 
-### Full samplesheet
+| Column        | Description                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| `rna_id`      | Unique RNA sample identifier without spaces.                                                          |
+| `bam`         | Coordinate-sorted RNA-seq BAM containing aligned reads; must end in `.bam`.                           |
+| `bai`         | Index for `bam`; must end in `.bai`.                                                                  |
+| `unpaired_r1` | Gzip-compressed read-1 FASTQ to combine with BAM-derived MHC reads; must end in `.fq.gz`/`.fastq.gz`. |
+| `unpaired_r2` | Gzip-compressed read-2 FASTQ to combine with BAM-derived MHC reads; must end in `.fq.gz`/`.fastq.gz`. |
 
-The pipeline will auto-detect whether a sample is single- or paired-end using the information provided in the samplesheet. The samplesheet can have as many columns as you desire, however, there is a strict requirement for the first 3 columns to match those defined in the table below.
+All columns are mandatory and each `rna_id` may occur only once. Relative file paths are resolved from the samplesheet directory, launch directory, or pipeline project directory. The extraction is paired-end only.
 
-A final samplesheet file consisting of both single- and paired-end data may look something like the one below. This is for 6 samples, where `TREATMENT_REP3` has been sequenced twice.
+`--hla_region` is passed unchanged to samtools. The user must choose coordinates and chromosome notation that match every BAM header: the pipeline does not translate `6` to `chr6`, or vice versa.
 
-```csv title="samplesheet.csv"
-sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
-CONTROL_REP2,AEG588A2_S2_L002_R1_001.fastq.gz,AEG588A2_S2_L002_R2_001.fastq.gz
-CONTROL_REP3,AEG588A3_S3_L002_R1_001.fastq.gz,AEG588A3_S3_L002_R2_001.fastq.gz
-TREATMENT_REP1,AEG588A4_S4_L003_R1_001.fastq.gz,
-TREATMENT_REP2,AEG588A5_S5_L003_R1_001.fastq.gz,
-TREATMENT_REP3,AEG588A6_S6_L003_R1_001.fastq.gz,
-TREATMENT_REP3,AEG588A6_S6_L004_R1_001.fastq.gz,
-```
-
-| Column    | Description                                                                                                                                                                            |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sample`  | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`). |
-| `fastq_1` | Full path to FastQ file for Illumina short reads 1. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                             |
-| `fastq_2` | Full path to FastQ file for Illumina short reads 2. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                             |
-
-An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
+For each sample, the pipeline extracts complete pairs overlapping this region, excludes secondary and supplementary alignments, and combines the recovered mates with the supplied FASTQs. An [example RNA samplesheet](../assets/rna_samples.csv) is included.
 
 ## WGS samplesheet input
 
@@ -84,7 +70,8 @@ The graph name defaults to `PRG_MHC_GRCh38_withIMGT` and can be changed with `--
 
 ```bash
 nextflow run nf-core/hlarnaseq \
-    --input ./samplesheet.csv \
+    --rna_samples ./rna_samples.csv \
+    --hla_region chr6:28500000-33400000 \
     --wgs_samples ./wgs_samples.csv \
     --hlala_graph_dir /path/to/HLA-LA/graphs \
     --outdir ./results
@@ -95,10 +82,13 @@ nextflow run nf-core/hlarnaseq \
 The typical command for running the pipeline is as follows:
 
 ```bash
-nextflow run nf-core/hlarnaseq --input ./samplesheet.csv --outdir ./results --genome GRCh37 -profile docker
+nextflow run nf-core/hlarnaseq \
+    --rna_samples ./rna_samples.csv \
+    --hla_region chr6:28500000-33400000 \
+    --outdir ./results
 ```
 
-This will launch the pipeline with the `docker` configuration profile. See below for more information about profiles.
+This early-stage pipeline expects samtools and arcasHLA to be available in the active Conda environment.
 
 Note that the pipeline will create the following files in your working directory:
 
@@ -125,7 +115,8 @@ nextflow run nf-core/hlarnaseq -profile docker -params-file params.yaml
 with:
 
 ```yaml title="params.yaml"
-input: './samplesheet.csv'
+rna_samples: './rna_samples.csv'
+hla_region: 'chr6:28500000-33400000'
 outdir: './results/'
 genome: 'GRCh38'
 <...>

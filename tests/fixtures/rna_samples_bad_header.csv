@@ -1,0 +1,2 @@
+bam,rna_id,bai,unpaired_r1,unpaired_r2
+missing.bam,RNA_SAMPLE_1,missing.bam.bai,missing_1.fastq.gz,missing_2.fastq.gz

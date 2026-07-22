@@ -7,6 +7,7 @@ include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlarnaseq_pipeline'
 include { HLALA                  } from '../subworkflows/local/hlala'
+include { ARCASHLA                } from '../subworkflows/local/arcashla'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -17,12 +18,19 @@ include { HLALA                  } from '../subworkflows/local/hlala'
 workflow HLARNASEQ {
 
     take:
-    ch_samplesheet     // channel: samplesheet read in from --input
+    ch_rna_samplesheet // channel: RNA samplesheet read in from --rna_samples
     ch_wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
     main:
 
     ch_versions = channel.empty()
     ch_hlala_combined = channel.empty()
+    ch_arcashla_reads = channel.empty()
+
+    if (params.rna_samples) {
+        ARCASHLA(ch_rna_samplesheet)
+        ch_versions = ch_versions.mix(ARCASHLA.out.versions)
+        ch_arcashla_reads = ARCASHLA.out.reads
+    }
 
     if (params.wgs_samples) {
         HLALA(ch_wgs_samplesheet)
@@ -63,6 +71,7 @@ workflow HLARNASEQ {
     emit:
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
     hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.csv) ]
+    arcashla_reads = ch_arcashla_reads           // channel: [ val(meta), [ path(read1), path(read2) ] ]
 
 }
 

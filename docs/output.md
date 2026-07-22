@@ -12,8 +12,22 @@ The directories listed below will be created in the results directory after the 
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
 
+- [arcasHLA read extraction](#arcashla-read-extraction) - Prepare paired RNA reads for later arcasHLA genotyping
 - [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
+
+### arcasHLA read extraction
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `arcashla/extracted/`
+  - `<rna_id>.mhc_1.fq.gz`: supplied read-1 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
+  - `<rna_id>.mhc_2.fq.gz`: supplied read-2 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
+
+</details>
+
+The files are concatenated gzip streams and are accepted by standard gzip-aware FASTQ readers. The pipeline does not run arcasHLA genotyping in this stage.
 
 ### HLA-LA
 

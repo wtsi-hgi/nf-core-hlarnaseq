@@ -16,6 +16,7 @@ Environment:
   NEXTFLOW_WORKDIR   Nextflow work directory. Default: <RUN_DIR>/nextflow.workdir
   NEXTFLOW_LOG       Nextflow log path. Default: <RUN_DIR>/testdata.log
   WGS_SAMPLESHEET    WGS samplesheet path. Default: <repo>/assets/wgs_samples.csv
+  HLA_REGION         Region passed unchanged to samtools. Default: chr6:28500000-33400000
 EOF
 }
 
@@ -26,19 +27,20 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_DIR="${RUN_DIR:-${ROOT_DIR}/artifacts/testdata-run}"
-INPUT_SAMPLESHEET="${RUN_DIR}/input.csv"
+RNA_SAMPLESHEET="${RUN_DIR}/rna_samples.csv"
 OUTDIR="${OUTDIR:-${RUN_DIR}/results}"
 NEXTFLOW_WORKDIR="${NEXTFLOW_WORKDIR:-${RUN_DIR}/nextflow.workdir}"
 NEXTFLOW_LOG="${NEXTFLOW_LOG:-${RUN_DIR}/testdata.log}"
 WGS_SAMPLESHEET="${WGS_SAMPLESHEET:-${ROOT_DIR}/assets/wgs_samples.csv}"
 HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
+HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
 
 mkdir -p "${RUN_DIR}"
 
-cat > "${INPUT_SAMPLESHEET}" <<CSV
-sample,fastq_1,fastq_2
-RNA_VALIDATION,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/unmapped_fastq/SRR3192657_GSM2072350_ENCLB038ZZZ.unmapped_1.fastq.gz,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/unmapped_fastq/SRR3192657_GSM2072350_ENCLB038ZZZ.unmapped_2.fastq.gz
+cat > "${RNA_SAMPLESHEET}" <<CSV
+rna_id,bam,bai,unpaired_r1,unpaired_r2
+SRR3192657_GSM2072350_ENCLB038ZZZ,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/hla_bam/SRR3192657_GSM2072350_ENCLB038ZZZ.chr6_hla.GRCh38.bam,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/hla_bam/SRR3192657_GSM2072350_ENCLB038ZZZ.chr6_hla.GRCh38.bam.bai,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/unmapped_fastq/SRR3192657_GSM2072350_ENCLB038ZZZ.unmapped_1.fastq.gz,${ROOT_DIR}/testdata-make/hlarnases-testdata/rnaseq/unmapped_fastq/SRR3192657_GSM2072350_ENCLB038ZZZ.unmapped_2.fastq.gz
 CSV
 
 cd "${ROOT_DIR}"
@@ -60,7 +62,8 @@ nextflow -log "${NEXTFLOW_LOG}" \
     "${profile_args[@]}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
     -resume \
-    --input "${INPUT_SAMPLESHEET}" \
+    --rna_samples "${RNA_SAMPLESHEET}" \
+    --hla_region "${HLA_REGION}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \
     --hlala_graph_dir "$HLALA_GRAPHS"  \
     --outdir "${OUTDIR}" \

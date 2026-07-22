@@ -1,2 +1,2 @@
-rna_sample_id,genome_sample_id,star_bam_path,featurecounts_path,unmapped_fastq_r1,unmapped_fastq_r2
-RNA_SAMPLE_1,GENOME_SAMPLE_1,/path/to/rnaseq/star_align/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam,/path/to/rnaseq/featurecounts/RNA_SAMPLE_1.featureCounts.txt,/path/to/rnaseq/star_align/RNA_SAMPLE_1.unmapped_1.fastq.gz,/path/to/rnaseq/star_align/RNA_SAMPLE_1.unmapped_2.fastq.gz
+rna_id,bam,bai,unpaired_r1,unpaired_r2
+RNA_SAMPLE_1,/path/to/RNA_SAMPLE_1.bam,/path/to/RNA_SAMPLE_1.bam.bai,/path/to/RNA_SAMPLE_1.unpaired_1.fastq.gz,/path/to/RNA_SAMPLE_1.unpaired_2.fastq.gz

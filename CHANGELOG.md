@@ -9,8 +9,12 @@ Initial release of nf-core/hlarnaseq, created with the [nf-core](https://nf-co.r
 
 ### `Added`
 
+- Added required `--rna_samples` and `--hla_region` inputs and extraction of arcasHLA-ready paired MHC FASTQs with samtools.
+
 ### `Fixed`
 
 ### `Dependencies`
 
 ### `Deprecated`
+
+- Removed the generic `--input` FASTQ samplesheet contract in favor of the RNA-specific manifest.

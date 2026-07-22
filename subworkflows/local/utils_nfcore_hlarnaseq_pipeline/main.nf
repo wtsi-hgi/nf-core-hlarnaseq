@@ -32,7 +32,7 @@ workflow PIPELINE_INITIALISATION {
     monochrome_logs   // boolean: Do not use coloured log outputs
     nextflow_cli_args //   array: List of positional nextflow CLI args
     outdir            //  string: The output directory where the results will be saved
-    input             //  string: Path to input samplesheet
+    rna_samples       //  string: Path to RNA samplesheet
     wgs_samples       //  string: Path to WGS samplesheet
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
@@ -72,7 +72,7 @@ workflow PIPELINE_INITIALISATION {
 * Software dependencies
     https://github.com/nf-core/hlarnaseq/blob/master/CITATIONS.md
 """
-    command = "nextflow run ${workflow.manifest.name} -profile <docker/singularity/.../institute> --input samplesheet.csv --wgs_samples wgs_samples.csv --outdir <OUTDIR>"
+    command = "nextflow run ${workflow.manifest.name} --rna_samples rna_samples.csv --hla_region chr6:28500000-33400000 --outdir <OUTDIR>"
 
     UTILS_NFSCHEMA_PLUGIN (
         workflow,
@@ -99,28 +99,27 @@ workflow PIPELINE_INITIALISATION {
     validateInputParameters()
 
     //
-    // Create channel from input file provided through params.input
+    // Create channel from RNA samplesheet provided through params.rna_samples
     //
 
+    validateRnaSamplesheetHeader(rna_samples)
+    validateRnaSamplesheetIds(rna_samples)
+
     channel
-        .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
+        .fromList(samplesheetToList(rna_samples, "${projectDir}/assets/schema_rna_samples.json"))
         .map {
-            meta, fastq_1, fastq_2 ->
-                if (!fastq_2) {
-                    return [ meta.id, meta + [ single_end:true ], [ fastq_1 ] ]
-                } else {
-                    return [ meta.id, meta + [ single_end:false ], [ fastq_1, fastq_2 ] ]
-                }
+            meta, bam, bai, unpaired_r1, unpaired_r2 ->
+                return [
+                    meta + [ single_end:false ],
+                    validateRnaSamplesheetFile(rna_samples, bam, "bam"),
+                    validateRnaSamplesheetFile(rna_samples, bai, "bai"),
+                    [
+                        validateRnaSamplesheetFile(rna_samples, unpaired_r1, "unpaired_r1"),
+                        validateRnaSamplesheetFile(rna_samples, unpaired_r2, "unpaired_r2")
+                    ]
+                ]
         }
-        .groupTuple()
-        .map { samplesheet ->
-            validateInputSamplesheet(samplesheet)
-        }
-        .map {
-            meta, fastqs ->
-                return [ meta, fastqs.flatten() ]
-        }
-        .set { ch_samplesheet }
+        .set { ch_rna_samplesheet }
 
     //
     // Create channel from WGS samplesheet provided through params.wgs_samples
@@ -144,7 +143,7 @@ workflow PIPELINE_INITIALISATION {
     }
 
     emit:
-    samplesheet     = ch_samplesheet
+    rna_samplesheet = ch_rna_samplesheet
     wgs_samplesheet = ch_wgs_samplesheet
     versions        = ch_versions
 }
@@ -209,18 +208,56 @@ def validateInputParameters() {
 }
 
 //
-// Validate channels from input samplesheet
+// Validate RNA samplesheet header
 //
-def validateInputSamplesheet(input) {
-    def (metas, fastqs) = input[1..2]
+def validateRnaSamplesheetHeader(samplesheet) {
+    def expected_header = "rna_id,bam,bai,unpaired_r1,unpaired_r2"
+    def observed_header = file(samplesheet).readLines().find { line -> line.trim() }?.trim()
 
-    // Check that multiple runs of the same sample are of the same datatype i.e. single-end / paired-end
-    def endedness_ok = metas.collect{ meta -> meta.single_end }.unique().size == 1
-    if (!endedness_ok) {
-        error("Please check input samplesheet -> Multiple runs of a sample must be of the same datatype i.e. single-end or paired-end: ${metas[0].id}")
+    if (observed_header != expected_header) {
+        error("Please check RNA samplesheet -> Header must be exactly: ${expected_header}")
+    }
+}
+
+//
+// Validate that RNA sample identifiers are unique
+//
+def validateRnaSamplesheetIds(samplesheet) {
+    def lines = file(samplesheet).readLines().findAll { line -> line.trim() }
+    def ids = lines.drop(1).collect { line -> line.split(',', -1)[0].trim() }
+    def duplicate_ids = ids.countBy { it }.findAll { id, count -> id && count > 1 }.keySet().sort()
+
+    if (duplicate_ids) {
+        error("Please check RNA samplesheet -> Duplicate rna_id values are not allowed: ${duplicate_ids.join(', ')}")
+    }
+}
+
+//
+// Validate and resolve RNA samplesheet file entries
+//
+def validateRnaSamplesheetFile(samplesheet, entry, field_name) {
+    def entry_path = file(entry)
+
+    if (entry_path.isAbsolute() && entry_path.exists()) {
+        return entry_path
     }
 
-    return [ metas[0], fastqs ]
+    def launch_path = file(workflow.launchDir)
+    def relative_entry = entry_path.isAbsolute() && entry_path.startsWith(launch_path) ? launch_path.relativize(entry_path) : entry_path
+    def candidate_paths = [
+        file(samplesheet).parent.resolve(relative_entry).normalize(),
+        launch_path.resolve(relative_entry).normalize(),
+        file(projectDir).resolve(relative_entry).normalize()
+    ]
+
+    def resolved_path = candidate_paths.find { candidate -> candidate.exists() }
+
+    if (!resolved_path) {
+        def searched_paths = candidate_paths.collect { candidate -> candidate.toString() }.unique().join(", ")
+        error("Please check RNA samplesheet -> ${field_name} does not exist: ${entry}. Searched: ${searched_paths}")
+    }
+
+    return resolved_path
 }
 
 //

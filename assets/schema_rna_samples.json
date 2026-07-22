@@ -7,54 +7,37 @@
     "items": {
         "type": "object",
         "properties": {
-            "rna_sample_id": {
+            "rna_id": {
                 "type": "string",
                 "pattern": "^\\S+$",
                 "errorMessage": "RNA sample ID must be provided and cannot contain spaces",
-                "meta": ["id", "rna_sample_id"]
+                "meta": ["id", "rna_id"]
             },
-            "genome_sample_id": {
-                "type": "string",
-                "pattern": "^\\S+$",
-                "errorMessage": "Genome sample ID must be provided and cannot contain spaces",
-                "meta": ["genome_sample_id"]
-            },
-            "star_bam_path": {
+            "bam": {
                 "type": "string",
                 "format": "file-path",
-                "exists": true,
                 "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bam|BAM)$",
-                "errorMessage": "STAR BAM path must be provided, cannot contain spaces and must have extension '.bam'"
+                "errorMessage": "RNA BAM path must be provided, cannot contain spaces and must have extension '.bam'"
             },
-            "featurecounts_path": {
+            "bai": {
                 "type": "string",
                 "format": "file-path",
-                "exists": true,
-                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(txt|tsv|csv|TXT|TSV|CSV)$",
-                "errorMessage": "featureCounts path must be provided, cannot contain spaces and must have extension '.txt', '.tsv' or '.csv'"
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bai|BAI)$",
+                "errorMessage": "RNA BAM index path must be provided, cannot contain spaces and must have extension '.bai'"
             },
-            "unmapped_fastq_r1": {
+            "unpaired_r1": {
                 "type": "string",
                 "format": "file-path",
-                "exists": true,
                 "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
-                "errorMessage": "Unmapped read 1 FastQ file must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "errorMessage": "Unpaired read 1 FASTQ must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
             },
-            "unmapped_fastq_r2": {
+            "unpaired_r2": {
                 "type": "string",
                 "format": "file-path",
-                "exists": true,
                 "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
-                "errorMessage": "Unmapped read 2 FastQ file must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "errorMessage": "Unpaired read 2 FASTQ must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
             }
         },
-        "required": [
-            "rna_sample_id",
-            "genome_sample_id",
-            "star_bam_path",
-            "featurecounts_path",
-            "unmapped_fastq_r1",
-            "unmapped_fastq_r2"
-        ]
+        "required": ["rna_id", "bam", "bai", "unpaired_r1", "unpaired_r2"]
     }
 }
