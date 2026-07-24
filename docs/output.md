@@ -12,11 +12,11 @@ The directories listed below will be created in the results directory after the 
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
 
-- [arcasHLA read extraction](#arcashla-read-extraction) - Prepare paired RNA reads for later arcasHLA genotyping
+- [arcasHLA read extraction and validation](#arcashla-read-extraction-and-validation) - Prepare and validate paired RNA reads for later arcasHLA genotyping
 - [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
-### arcasHLA read extraction
+### arcasHLA read extraction and validation
 
 <details markdown="1">
 <summary>Output files</summary>
@@ -24,10 +24,12 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - `arcashla/extracted/`
   - `<rna_id>.mhc_1.fq.gz`: supplied read-1 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
   - `<rna_id>.mhc_2.fq.gz`: supplied read-2 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
+- `arcashla/validation/`
+  - `<rna_id>.validatefastq.log`: pairing-validation report for the extracted FASTQ files.
 
 </details>
 
-The files are concatenated gzip streams and are accepted by standard gzip-aware FASTQ readers. The pipeline does not run arcasHLA genotyping in this stage.
+The extracted files are concatenated gzip streams and are accepted by standard gzip-aware FASTQ readers. They are forwarded only after `validatefastq` confirms the mates have consistent names, order, and record structure. A validator command failure or reported `ERROR` stops the pipeline. The pipeline does not run arcasHLA genotyping in this stage.
 
 ### HLA-LA
 

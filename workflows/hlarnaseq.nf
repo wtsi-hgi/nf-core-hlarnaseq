@@ -25,11 +25,13 @@ workflow HLARNASEQ {
     ch_versions = channel.empty()
     ch_hlala_combined = channel.empty()
     ch_arcashla_reads = channel.empty()
+    ch_arcashla_validation_logs = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
         ch_versions = ch_versions.mix(ARCASHLA.out.versions)
         ch_arcashla_reads = ARCASHLA.out.reads
+        ch_arcashla_validation_logs = ARCASHLA.out.validation_logs
     }
 
     if (params.wgs_samples) {
@@ -72,6 +74,7 @@ workflow HLARNASEQ {
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
     hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.csv) ]
     arcashla_reads = ch_arcashla_reads           // channel: [ val(meta), [ path(read1), path(read2) ] ]
+    arcashla_validation_logs = ch_arcashla_validation_logs // channel: [ val(meta), path(validatefastq.log) ]
 
 }
 

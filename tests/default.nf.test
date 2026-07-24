@@ -21,6 +21,7 @@ nextflow_pipeline {
                 { assert workflow.success},
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz").size() > 0 },
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz").size() > 0 },
+                { assert new File("$outputDir/arcashla/validation/RNA_SAMPLE_1.validatefastq.log").text.contains('no errors found') },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
@@ -86,6 +87,25 @@ nextflow_pipeline {
             assertAll(
                 { assert workflow.failed },
                 { assert workflow.stdout.any { it.contains('Validation of pipeline parameters failed!') } }
+            )
+        }
+    }
+
+    test("reject mismatched extracted FASTQ pair") {
+
+        config "../conf/test.config"
+
+        when {
+            params {
+                rna_samples = "$projectDir/tests/fixtures/rna_samples_invalid_pair.csv"
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.failed },
+                { assert workflow.stdout.any { it.contains('Sequence headers do not match') } }
             )
         }
     }

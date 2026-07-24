@@ -1,0 +1,2 @@
+rna_id,bam,bai,unpaired_r1,unpaired_r2
+RNA_SAMPLE_INVALID_PAIR,tests/fixtures/rnaseq/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam,tests/fixtures/rnaseq/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam.bai,tests/fixtures/rnaseq/RNA_SAMPLE_1.unmapped_1.fastq.gz,tests/fixtures/rnaseq/RNA_SAMPLE_1.unmapped_bad_2.fastq.gz

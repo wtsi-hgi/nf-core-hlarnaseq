@@ -38,6 +38,8 @@ All columns are mandatory and each `rna_id` may occur only once. Relative file p
 
 For each sample, the pipeline extracts complete pairs overlapping this region, excludes secondary and supplementary alignments, and combines the recovered mates with the supplied FASTQs. An [example RNA samplesheet](../assets/rna_samples.csv) is included.
 
+Each extracted read pair is checked with `validatefastq` before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
+
 ## WGS samplesheet input
 
 Optionally provide WGS BAM inputs with `--wgs_samples`:
@@ -88,7 +90,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools and arcasHLA to be available in the active Conda environment.
+This early-stage pipeline expects samtools, arcasHLA, and validatefastq to be available in the active Conda environment.
 
 Note that the pipeline will create the following files in your working directory:
 

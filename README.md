@@ -22,6 +22,7 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
      workflows use the "tube map" design for that. See https://nf-co.re/docs/guidelines/graphic_design/workflow_diagrams#examples for examples.   -->
 
 - Extract MHC region and unmapped reads from RNASeq data
+- Validate the extracted paired FASTQ files before arcasHLA analysis
 - Call HLA reference alleles from RNASeq data
 - (Optional) Call HLA reference alleles from WGS/WES data
   - Call HLA allele consensus on RNASeq and WGS/WES data

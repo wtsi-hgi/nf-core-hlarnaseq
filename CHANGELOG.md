@@ -10,6 +10,7 @@ Initial release of nf-core/hlarnaseq, created with the [nf-core](https://nf-co.r
 ### `Added`
 
 - Added required `--rna_samples` and `--hla_region` inputs and extraction of arcasHLA-ready paired MHC FASTQs with samtools.
+- Added per-sample validatefastq pairing validation for extracted arcasHLA reads, with validation logs under `arcashla/validation/`.
 
 ### `Fixed`
 
