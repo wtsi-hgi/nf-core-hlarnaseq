@@ -10,6 +10,8 @@ null/
 
 .idea
 
+.claude/settings.local.json
+
 artifacts
 .nf-test.log
 .nf-test

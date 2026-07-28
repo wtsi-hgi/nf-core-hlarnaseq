@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nextflow *)",
+      "Bash(nf-core *)",
+      "Bash(nf-test *)",
+      "Bash(pre-commit *)",
+      "Bash(./run_tests_remote*)",
+      "Bash(command -v *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ],
+    "deny": [
+      "Bash(docker *)",
+      "Bash(rm -rf *)",
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git commit*)"
+    ]
+  }
+}
