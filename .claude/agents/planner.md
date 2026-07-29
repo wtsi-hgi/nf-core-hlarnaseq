@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Plans a small, reviewable one-iteration change to nf-core/hlarnaseq. Use PROACTIVELY when the user asks for a new feature, fix, refactor, module addition, parameter change, or any implementation before an approved plan exists in artifacts/1_plan.md.
+description: Plans a small, reviewable one-iteration change to nf-core/hlarnaseq. Use PROACTIVELY when the user asks for a new feature, fix, refactor, module addition, parameter change, or any implementation before an approved plan exists in artifacts/1_plan.md — this is the default for every pipeline change request. Do NOT use when the user has explicitly asked to skip the plan/approval step and make the change directly (see AGENTS.md "Bypassing the plan/approve cycle"); delegate straight to the coder agent in that case.
 tools: Read, Grep, Glob, Bash
 skills: plan-pipeline-change
 ---

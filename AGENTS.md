@@ -145,9 +145,21 @@ runs do not overwrite earlier evidence.
 ## Human-in-the-loop Rules
 
 - Ask clarifying questions only when a reasonable assumption would risk wrong pipeline behavior or wasted implementation.
+- Default behavior for every pipeline change is the full plan → approve → implement → validate cycle described above. This is the default for any request to add, fix, change, or refactor pipeline behavior, even if the human does not mention "plan" explicitly.
 - For implementation requests without an approved plan, produce the plan first and wait.
 - Explicit approval means the human says the current `artifacts/1_plan.md` is approved, for example: "approved", "approve the plan", or "implement this plan".
 - `artifacts/2_implement.md` must quote or summarize the approval message with date/time when available.
 - Keep each iteration small enough for practical review.
 - Never hide skipped validation.
 - Do not rewrite unrelated scaffold files merely to satisfy style preferences.
+
+### Bypassing the plan/approve cycle
+
+- The plan → approve → implement → validate cycle may be skipped only when the human explicitly instructs a direct change in the same request, using clear language such as "make this change directly", "skip the plan", "just implement it, no plan needed", or "don't stop for approval". A generic sense of urgency or a short task description is not sufficient — the instruction to bypass must be explicit and about process, not just about scope.
+- When bypassing is explicitly requested:
+  - still keep the change small and reviewable, and still avoid introducing containers, unrelated refactors, or new frameworks;
+  - still run validation appropriate to the change and report results (validation itself is not optional, only the pre-implementation plan/approval stop is skipped);
+  - still do not commit to Git unless separately asked;
+  - state in the response that the plan/approval step was skipped because the human asked for a direct change, so the bypass is visible and auditable.
+- If a bypass instruction is ambiguous (e.g., unclear whether it covers approval, validation, or both), ask a single clarifying question rather than assuming the broadest possible skip.
+- AI-configuration-only changes (`AGENTS.md`, `.agents/**`, `.claude/**`, `artifacts/ai-*.md`) already skip the pipeline plan/approve/implement/validate cycle by default per "AI Configuration Maintenance" above; that is a separate, standing exception and does not require the human to say anything extra.
