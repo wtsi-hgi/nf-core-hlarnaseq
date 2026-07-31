@@ -40,10 +40,12 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 - `arcashla/genotype/`
   - `<rna_id>.genotype.json`: arcasHLA genotype calls for the sample.
   - `<rna_id>.genotype.log`: arcasHLA genotype run log for the sample.
+- `arcashla/`
+  - `arcasHLA_combined.csv`: Combined arcasHLA genotype calls across all RNA samples, in long format with one row per HLA gene per sample and columns `HLA_gene,allele1_rna,allele2_rna,rna_sample_id`, covering a fixed list of 21 `HLA-*` genes (genes not reported for a sample are padded with `NA` alleles).
 
 </details>
 
-`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment rather than the pipeline's main environment (see [usage docs](usage.md) for details); this pipeline never builds or updates the arcasHLA reference itself. No combine/merge-across-samples step is produced in this stage.
+`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment rather than the pipeline's main environment (see [usage docs](usage.md) for details); this pipeline never builds or updates the arcasHLA reference itself.
 
 ### HLA-LA
 

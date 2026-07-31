@@ -2,7 +2,8 @@
   "permissions": {
     "allow":[
       "Bash",
-      "Edit"
+      "Edit",
+      "Write"
     ],
     "deny": [
       "Bash(docker *)",

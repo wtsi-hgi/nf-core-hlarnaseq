@@ -2,6 +2,14 @@
     "-profile test": {
         "content": [
             {
+                "ARCASHLA_COMBINE": {
+                    "R": "unknown",
+                    "jsonlite": "unknown",
+                    "dplyr": "unknown",
+                    "tibble": "unknown",
+                    "stringr": "unknown",
+                    "purrr": "unknown"
+                },
                 "ARCASHLA_EXTRACT": {
                     "samtools": 1.24
                 },
@@ -17,6 +25,7 @@
             },
             [
                 "arcashla",
+                "arcashla/arcasHLA_combined.csv",
                 "arcashla/extracted",
                 "arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz",
                 "arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz",
@@ -32,7 +41,7 @@
                 
             ]
         ],
-        "timestamp": "2026-07-30T11:23:23.666156325",
+        "timestamp": "2026-07-31T13:29:21.883774288",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.4"

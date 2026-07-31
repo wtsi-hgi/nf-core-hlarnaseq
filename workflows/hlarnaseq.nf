@@ -28,6 +28,7 @@ workflow HLARNASEQ {
     ch_arcashla_validation_logs = channel.empty()
     ch_arcashla_genotypes = channel.empty()
     ch_arcashla_genotype_logs = channel.empty()
+    ch_arcashla_combined_genotype = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -36,6 +37,7 @@ workflow HLARNASEQ {
         ch_arcashla_validation_logs = ARCASHLA.out.validation_logs
         ch_arcashla_genotypes = ARCASHLA.out.genotypes
         ch_arcashla_genotype_logs = ARCASHLA.out.genotype_logs
+        ch_arcashla_combined_genotype = ARCASHLA.out.combined_genotype
     }
 
     if (params.wgs_samples) {
@@ -81,6 +83,7 @@ workflow HLARNASEQ {
     arcashla_validation_logs = ch_arcashla_validation_logs // channel: [ val(meta), path(validatefastq.log) ]
     arcashla_genotypes = ch_arcashla_genotypes   // channel: [ val(meta), path(genotype.json) ]
     arcashla_genotype_logs = ch_arcashla_genotype_logs // channel: [ val(meta), path(genotype.log) ]
+    arcashla_combined_genotype = ch_arcashla_combined_genotype // channel: [ path(arcasHLA_combined.csv) ]
 
 }
 

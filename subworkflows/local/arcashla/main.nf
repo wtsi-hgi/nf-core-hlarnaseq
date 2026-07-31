@@ -1,6 +1,7 @@
 include { ARCASHLA_EXTRACT } from '../../../modules/local/arcashla/extract'
 include { ARCASHLA_VALIDATE_FASTQ } from '../../../modules/local/arcashla/validate'
 include { ARCASHLA_GENOTYPE } from '../../../modules/local/arcashla/genotype'
+include { ARCASHLA_COMBINE } from '../../../modules/local/arcashla/combine'
 
 workflow ARCASHLA {
 
@@ -18,14 +19,28 @@ workflow ARCASHLA {
 
     ARCASHLA_GENOTYPE(ARCASHLA_VALIDATE_FASTQ.out.reads)
 
+    ch_genotype_json = ARCASHLA_GENOTYPE.out.genotype
+        .map { meta, genotype_json -> [ meta.id, genotype_json ] }
+        .collect(flat: false)
+        .map { rows ->
+            [
+                rows.collect { row -> row[0] },
+                rows.collect { row -> row[1] }
+            ]
+        }
+
+    ARCASHLA_COMBINE(ch_genotype_json)
+
     ch_versions = ARCASHLA_EXTRACT.out.versions
         .mix(ARCASHLA_VALIDATE_FASTQ.out.versions)
         .mix(ARCASHLA_GENOTYPE.out.versions)
+        .mix(ARCASHLA_COMBINE.out.versions)
 
     emit:
-    reads           = ARCASHLA_VALIDATE_FASTQ.out.reads
-    validation_logs = ARCASHLA_VALIDATE_FASTQ.out.logs
-    genotypes       = ARCASHLA_GENOTYPE.out.genotype
-    genotype_logs   = ARCASHLA_GENOTYPE.out.log
-    versions        = ch_versions
+    reads             = ARCASHLA_VALIDATE_FASTQ.out.reads
+    validation_logs   = ARCASHLA_VALIDATE_FASTQ.out.logs
+    genotypes         = ARCASHLA_GENOTYPE.out.genotype
+    genotype_logs     = ARCASHLA_GENOTYPE.out.log
+    combined_genotype = ARCASHLA_COMBINE.out.csv
+    versions          = ch_versions
 }

@@ -12,8 +12,11 @@ Initial release of nf-core/hlarnaseq, created with the [nf-core](https://nf-co.r
 - Added required `--rna_samples` and `--hla_region` inputs and extraction of arcasHLA-ready paired MHC FASTQs with samtools.
 - Added per-sample validatefastq pairing validation for extracted arcasHLA reads, with validation logs under `arcashla/validation/`.
 - Added an `ARCASHLA_GENOTYPE` step that runs `arcasHLA genotype` on validated RNA reads (configurable via `--arcashla_genes`), writing per-sample results under `arcashla/genotype/`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment.
+- Added an `ARCASHLA_COMBINE` step that merges per-sample arcasHLA genotype JSON results into a single long-format `arcashla/arcasHLA_combined.csv`, using a new `bin/combine_arcashla_genotypes.R` script.
 
 ### `Fixed`
+
+- Fixed `bin/combine_arcashla_genotypes.R` returning an under-shaped, sample-ID-less row for samples whose arcasHLA genotype JSON is the valid-but-empty `{}` (not enough reads to genotype), so the combined CSV now correctly NA-pads alleles while preserving `rna_sample_id` for that sample.
 
 ### `Dependencies`
 
