@@ -5,6 +5,9 @@
                 "ARCASHLA_EXTRACT": {
                     "samtools": 1.24
                 },
+                "ARCASHLA_GENOTYPE": {
+                    "arcasHLA": "unknown"
+                },
                 "ARCASHLA_VALIDATE_FASTQ": {
                     "validatefastq": "0.1.1"
                 },
@@ -17,6 +20,9 @@
                 "arcashla/extracted",
                 "arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz",
                 "arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz",
+                "arcashla/genotype",
+                "arcashla/genotype/RNA_SAMPLE_1.genotype.json",
+                "arcashla/genotype/RNA_SAMPLE_1.genotype.log",
                 "arcashla/validation",
                 "arcashla/validation/RNA_SAMPLE_1.validatefastq.log",
                 "pipeline_info",
@@ -26,7 +32,7 @@
                 
             ]
         ],
-        "timestamp": "2026-07-22T14:47:00.572022433",
+        "timestamp": "2026-07-30T11:23:23.666156325",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.4"

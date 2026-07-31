@@ -2,3 +2,5 @@
 pipeline_info/*.{html,json,txt,yml}
 arcashla/extracted/*.fq.gz
 arcashla/validation/*.validatefastq.log
+arcashla/genotype/*.genotype.json
+arcashla/genotype/*.genotype.log

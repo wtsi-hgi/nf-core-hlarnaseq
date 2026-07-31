@@ -10,6 +10,10 @@
 
 ## Pipeline tools
 
+## [arcasHLA](https://doi.org/10.1093/bioinformatics/btz474)
+
+> Orenbuch R, Filip I, Comito D, Shaman J, Pe'er I, Rabadan R. arcasHLA: high-resolution HLA typing from RNAseq. Bioinformatics. 2020 Jan 1;36(1):33-40. doi: 10.1093/bioinformatics/btz474.
+
 ## [HLA-LA](https://doi.org/10.1093/bioinformatics/btz235)
 
 > Dilthey AT, Mentzer AJ, Carapito R, Cutland C, Cereb N, Madhi SA, Rhie A, Koren S, Bahram S, McVean G, Phillippy AM. HLA\*LA-HLA typing from linearly projected graph alignments. Bioinformatics. 2019 Nov 1;35(21):4394-4396. doi: 10.1093/bioinformatics/btz235.

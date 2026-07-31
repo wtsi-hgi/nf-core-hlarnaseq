@@ -40,6 +40,18 @@ For each sample, the pipeline extracts complete pairs overlapping this region, e
 
 Each extracted read pair is checked with `validatefastq` before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
 
+Once a sample's extracted reads pass validation, the pipeline runs `arcasHLA genotype` on them, requesting the genes listed in `--arcashla_genes` (a broad default gene list is provided). Per-sample results are written to `arcashla/genotype/<rna_id>.genotype.json` (+ `.log`).
+
+### arcasHLA genotyping environment
+
+`arcasHLA genotype` is invoked inside a dedicated Conda environment named `arcas-hla`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**: the pipeline does not create it, install packages into it, or build/update its reference at any point. Before running the pipeline with RNA samples, prepare this environment yourself with:
+
+- `arcas-hla=0.6.0`
+- `kallisto=0.44` (later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing)
+- a reference built via `arcasHLA reference` (IMGT/HLA database + kallisto index)
+
+The pipeline does not support redirecting `arcasHLA genotype` to a different reference at runtime; the reference used is whichever one is built into the `arcas-hla` environment.
+
 ## WGS samplesheet input
 
 Optionally provide WGS BAM inputs with `--wgs_samples`:
@@ -90,7 +102,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools, arcasHLA, and validatefastq to be available in the active Conda environment.
+This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment, and a separate, dedicated `arcas-hla` Conda environment to be prepared as described above for arcasHLA genotyping.
 
 Note that the pipeline will create the following files in your working directory:
 

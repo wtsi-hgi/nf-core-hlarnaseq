@@ -12,7 +12,8 @@ The directories listed below will be created in the results directory after the 
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
 
-- [arcasHLA read extraction and validation](#arcashla-read-extraction-and-validation) - Prepare and validate paired RNA reads for later arcasHLA genotyping
+- [arcasHLA read extraction and validation](#arcashla-read-extraction-and-validation) - Prepare and validate paired RNA reads for arcasHLA genotyping
+- [arcasHLA genotyping](#arcashla-genotyping) - HLA genotyping from validated RNA-seq reads
 - [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
@@ -29,7 +30,20 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 
 </details>
 
-The extracted files are concatenated gzip streams and are accepted by standard gzip-aware FASTQ readers. They are forwarded only after `validatefastq` confirms the mates have consistent names, order, and record structure. A validator command failure or reported `ERROR` stops the pipeline. The pipeline does not run arcasHLA genotyping in this stage.
+The extracted files are concatenated gzip streams and are accepted by standard gzip-aware FASTQ readers. They are forwarded only after `validatefastq` confirms the mates have consistent names, order, and record structure. A validator command failure or reported `ERROR` stops the pipeline.
+
+### arcasHLA genotyping
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `arcashla/genotype/`
+  - `<rna_id>.genotype.json`: arcasHLA genotype calls for the sample.
+  - `<rna_id>.genotype.log`: arcasHLA genotype run log for the sample.
+
+</details>
+
+`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment rather than the pipeline's main environment (see [usage docs](usage.md) for details); this pipeline never builds or updates the arcasHLA reference itself. No combine/merge-across-samples step is produced in this stage.
 
 ### HLA-LA
 

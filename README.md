@@ -23,7 +23,7 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
 
 - Extract MHC region and unmapped reads from RNASeq data
 - Validate the extracted paired FASTQ files before arcasHLA analysis
-- Call HLA reference alleles from RNASeq data
+- Call HLA reference alleles from RNASeq data with arcasHLA
 - (Optional) Call HLA reference alleles from WGS/WES data
   - Call HLA allele consensus on RNASeq and WGS/WES data
 - Map RNASeq data to personalized references

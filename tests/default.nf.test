@@ -6,6 +6,8 @@ nextflow_pipeline {
 
     test("-profile test") {
 
+        options "-stub-run"
+
         when {
             params {
                 outdir = "$outputDir"
@@ -22,6 +24,8 @@ nextflow_pipeline {
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz").size() > 0 },
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz").size() > 0 },
                 { assert new File("$outputDir/arcashla/validation/RNA_SAMPLE_1.validatefastq.log").text.contains('no errors found') },
+                { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.json").exists() },
+                { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.log").exists() },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
