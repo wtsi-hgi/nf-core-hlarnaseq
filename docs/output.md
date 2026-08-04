@@ -53,7 +53,7 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 <summary>Output files</summary>
 
 - `hlala/`
-  - `HLA-LA_combined.csv`: Combined HLA-LA G-group allele calls across all WGS samples, with columns `sample_id,HLA_allele`.
+  - `HLA-LA_combined.tsv`: Combined HLA-LA G-group allele calls across all WGS samples, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row, extracted from columns 1 and 3 of each sample's `R1_bestguess_G.txt`).
   - `<sample_id>/R1_bestguess_G.txt`: Per-sample HLA-LA G-group best guess file.
   - `<sample_id>/R1_bestguess.txt`: Per-sample HLA-LA best guess file, when produced by HLA-LA.
   - `<sample_id>/hla.tar.gz`: Archive of the per-sample HLA-LA `hla/` result directory, when produced.

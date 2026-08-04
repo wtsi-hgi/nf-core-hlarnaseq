@@ -78,7 +78,7 @@ workflow HLARNASEQ {
 
     emit:
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
-    hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.csv) ]
+    hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.tsv) ]
     arcashla_reads = ch_arcashla_reads           // channel: [ val(meta), [ path(read1), path(read2) ] ]
     arcashla_validation_logs = ch_arcashla_validation_logs // channel: [ val(meta), path(validatefastq.log) ]
     arcashla_genotypes = ch_arcashla_genotypes   // channel: [ val(meta), path(genotype.json) ]

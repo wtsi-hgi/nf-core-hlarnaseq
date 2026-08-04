@@ -10,7 +10,7 @@ process HLALA_COMBINE {
     tuple val(sample_ids), path(bestguess_files)
 
     output:
-    path "HLA-LA_combined.csv", emit: csv
+    path "HLA-LA_combined.tsv", emit: csv
     path "versions.yml", emit: versions
 
     script:
@@ -20,11 +20,11 @@ process HLALA_COMBINE {
     ${manifest}
     EOF
 
-    printf "sample_id,HLA_allele\\n" > HLA-LA_combined.csv
+    printf "sample_id\\tLocus\\tHLA_allele\\n" > HLA-LA_combined.tsv
     sort -t \$'\\t' -k1,1 hlala_manifest.tsv | while IFS=\$'\\t' read -r sample_id bestguess_file; do
         tail -n +2 "\${bestguess_file}" \\
-            | awk -F '\\t' -v sample_id="\${sample_id}" 'NF >= 3 && \$3 != "" { print sample_id "," \$3 }'
-    done >> HLA-LA_combined.csv
+            | awk -F '\\t' -v sample_id="\${sample_id}" 'NF >= 3 && \$3 != "" { print sample_id "\\t" \$1 "\\t" \$3 }'
+    done >> HLA-LA_combined.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
