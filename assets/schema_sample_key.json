@@ -1,0 +1,24 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/nf-core/hlarnaseq/master/assets/schema_sample_key.json",
+    "title": "nf-core/hlarnaseq pipeline - params.sample_key schema",
+    "description": "Schema for the RNA/WGS sample key manifest provided with params.sample_key",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "rnaseq_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "RNA sample ID must be provided and cannot contain spaces",
+                "meta": ["id", "rnaseq_sample_id"]
+            },
+            "wgs_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "WGS sample ID must be provided and cannot contain spaces"
+            }
+        },
+        "required": ["rnaseq_sample_id", "wgs_sample_id"]
+    }
+}

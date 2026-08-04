@@ -34,6 +34,7 @@ workflow PIPELINE_INITIALISATION {
     outdir            //  string: The output directory where the results will be saved
     rna_samples       //  string: Path to RNA samplesheet
     wgs_samples       //  string: Path to WGS samplesheet
+    sample_key        //  string: Path to RNA/WGS sample key
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
     show_hidden       // boolean: Show hidden parameters in the help message
@@ -142,9 +143,20 @@ workflow PIPELINE_INITIALISATION {
         ch_wgs_samplesheet = channel.empty()
     }
 
+    //
+    // Create channel from RNA/WGS sample key provided through params.sample_key
+    //
+    if (sample_key) {
+        validateSampleKeyHeader(sample_key)
+        ch_sample_key = channel.fromPath(sample_key)
+    } else {
+        ch_sample_key = channel.empty()
+    }
+
     emit:
     rna_samplesheet = ch_rna_samplesheet
     wgs_samplesheet = ch_wgs_samplesheet
+    sample_key      = ch_sample_key
     versions        = ch_versions
 }
 
@@ -300,6 +312,18 @@ def validateWgsSamplesheetFile(samplesheet, entry, field_name) {
 
     return resolved_path
 }
+//
+// Validate RNA/WGS sample key header
+//
+def validateSampleKeyHeader(sample_key) {
+    def expected_header = "rnaseq_sample_id,wgs_sample_id"
+    def observed_header = file(sample_key).readLines().find { line -> line.trim() }?.trim()
+
+    if (observed_header != expected_header) {
+        error("Please check sample key -> Header must be exactly: ${expected_header}")
+    }
+}
+
 //
 // Get attribute from genome config file e.g. fasta
 //

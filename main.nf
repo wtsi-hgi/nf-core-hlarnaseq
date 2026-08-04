@@ -45,6 +45,7 @@ workflow NFCORE_HLARNASEQ {
     take:
     rna_samplesheet // channel: RNA samplesheet read in from --rna_samples
     wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
+    sample_key      // channel: RNA/WGS sample key read in from --sample_key
 
     main:
 
@@ -53,7 +54,8 @@ workflow NFCORE_HLARNASEQ {
     //
     HLARNASEQ (
         rna_samplesheet,
-        wgs_samplesheet
+        wgs_samplesheet,
+        sample_key
     )
 }
 /*
@@ -76,6 +78,7 @@ workflow {
         params.outdir,
         params.rna_samples,
         params.wgs_samples,
+        params.sample_key,
         params.help,
         params.help_full,
         params.show_hidden
@@ -86,7 +89,8 @@ workflow {
     //
     NFCORE_HLARNASEQ (
         PIPELINE_INITIALISATION.out.rna_samplesheet,
-        PIPELINE_INITIALISATION.out.wgs_samplesheet
+        PIPELINE_INITIALISATION.out.wgs_samplesheet,
+        PIPELINE_INITIALISATION.out.sample_key
     )
     //
     // SUBWORKFLOW: Run completion tasks

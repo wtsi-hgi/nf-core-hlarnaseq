@@ -42,6 +42,42 @@
                     "help_text": "Optional WGS samplesheet with the exact columns WGS_sample_id,WGS_BAM_path,WGS_BAI_path. All entries are mandatory. See [usage docs](https://nf-co.re/hlarnaseq/usage#wgs-samplesheet-input).",
                     "fa_icon": "fas fa-file-csv"
                 },
+                "sample_key": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "schema": "assets/schema_sample_key.json",
+                    "mimetype": "text/csv",
+                    "pattern": "^\\S+\\.csv$",
+                    "description": "Path to comma-separated file mapping RNA samples to their matched WGS sample.",
+                    "help_text": "Optional RNA/WGS sample key with the exact columns rnaseq_sample_id,wgs_sample_id. One row per RNA sample with a matched WGS sample; RNA samples absent from this file are treated as having no WGS pairing. Required (together with --rna_samples and --wgs_samples) to trigger the HLA_CONSENSUS step. See [usage docs](https://nf-co.re/hlarnaseq/usage#rna-wgs-sample-key-input).",
+                    "fa_icon": "fas fa-file-csv"
+                },
+                "rna_excluded_samples": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/plain",
+                    "description": "Path to a plain-text file listing RNA sample IDs (one per line) to exclude from HLA consensus calling.",
+                    "help_text": "Optional. Passed through to the HLA_CONSENSUS step's `--rna-excluded-samples` flag.",
+                    "fa_icon": "fas fa-ban"
+                },
+                "wgs_excluded_samples": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/plain",
+                    "description": "Path to a plain-text file listing WGS sample IDs (one per line) to exclude from HLA consensus calling.",
+                    "help_text": "Optional. Passed through to the HLA_CONSENSUS step's `--wgs-excluded-samples` flag.",
+                    "fa_icon": "fas fa-ban"
+                },
+                "hla_consensus_truncate_fields": {
+                    "type": "integer",
+                    "default": 2,
+                    "description": "Number of colon-separated fields to keep when truncating HLA allele resolution during consensus calling.",
+                    "help_text": "Passed through to the HLA_CONSENSUS step's `--truncate-fields` flag.",
+                    "fa_icon": "fas fa-ruler"
+                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",

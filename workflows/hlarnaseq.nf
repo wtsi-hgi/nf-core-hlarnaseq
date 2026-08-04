@@ -8,6 +8,7 @@ include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pi
 include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlarnaseq_pipeline'
 include { HLALA                  } from '../subworkflows/local/hlala'
 include { ARCASHLA                } from '../subworkflows/local/arcashla'
+include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,6 +21,7 @@ workflow HLARNASEQ {
     take:
     ch_rna_samplesheet // channel: RNA samplesheet read in from --rna_samples
     ch_wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
+    ch_sample_key      // channel: RNA/WGS sample key read in from --sample_key
     main:
 
     ch_versions = channel.empty()
@@ -29,6 +31,8 @@ workflow HLARNASEQ {
     ch_arcashla_genotypes = channel.empty()
     ch_arcashla_genotype_logs = channel.empty()
     ch_arcashla_combined_genotype = channel.empty()
+    ch_hla_consensus_summary = channel.empty()
+    ch_hla_consensus_key = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -44,6 +48,26 @@ workflow HLARNASEQ {
         HLALA(ch_wgs_samplesheet)
         ch_versions = ch_versions.mix(HLALA.out.versions)
         ch_hlala_combined = HLALA.out.combined_csv
+    }
+
+    if (params.rna_samples && params.wgs_samples && params.sample_key) {
+        ch_rna_excluded_samples = params.rna_excluded_samples
+            ? Channel.fromPath(params.rna_excluded_samples)
+            : Channel.fromPath("${projectDir}/assets/NO_FILE")
+        ch_wgs_excluded_samples = params.wgs_excluded_samples
+            ? Channel.fromPath(params.wgs_excluded_samples)
+            : Channel.fromPath("${projectDir}/assets/NO_FILE")
+
+        HLA_CONSENSUS(
+            ch_arcashla_combined_genotype,
+            ch_hlala_combined,
+            ch_sample_key,
+            ch_rna_excluded_samples,
+            ch_wgs_excluded_samples
+        )
+        ch_versions = ch_versions.mix(HLA_CONSENSUS.out.versions)
+        ch_hla_consensus_summary = HLA_CONSENSUS.out.summary
+        ch_hla_consensus_key = HLA_CONSENSUS.out.consensus
     }
 
     //
@@ -84,6 +108,8 @@ workflow HLARNASEQ {
     arcashla_genotypes = ch_arcashla_genotypes   // channel: [ val(meta), path(genotype.json) ]
     arcashla_genotype_logs = ch_arcashla_genotype_logs // channel: [ val(meta), path(genotype.log) ]
     arcashla_combined_genotype = ch_arcashla_combined_genotype // channel: [ path(arcasHLA_combined.csv) ]
+    hla_consensus_summary = ch_hla_consensus_summary // channel: [ path(hla_consensus.rna_wgs_rna-hla_with_consensus.tsv) ]
+    hla_consensus_key = ch_hla_consensus_key // channel: [ path(hla_consensus.rna_wgs_hla_consensus.tsv) ]
 
 }
 

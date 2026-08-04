@@ -13,8 +13,7 @@ Core outputs:
 2) consensus_key: one row per (WGS_sample_ID, HLA_gene) with the consensus allele set
 
 Where "WGS_sample_ID" is:
-- WGS sample id if present in the key,
-- The synthetic key: "NoWgsSangerID:<USUBJID>" if the sample is present in the key file
+- WGS sample id if the RNA sample is present in the sample key,
 - else a synthetic id: "RNA_ONLY:<RNA_sample_ID>"
   (so RNA-only samples go into an individual group each)
 """
@@ -325,32 +324,43 @@ def load_hlala(
     )
     return agg
 
-def load_rna_wgs_key(key_path: str) -> pd.DataFrame:
+def load_rna_wgs_key(
+    key_path: str,
+    sep: str = ",",
+    rna_col: str = "rnaseq_sample_id",
+    wgs_col: str = "wgs_sample_id",
+) -> pd.DataFrame:
     """
-    Key file columns required:
-      sanger_sample_id_rnaseq
-      sanger_sample_id_wgs
+    RNA/WGS sample key file: a 2-column mapping of RNA sample IDs to their matched
+    WGS sample ID (one row per RNA sample that has a matched WGS sample). An RNA
+    sample simply absent from this file has no WGS pairing (handled downstream by
+    combine_rna_wgs()'s "RNA_ONLY:" fallback).
     """
-    rna_wgs_key = pd.read_csv(key_path, sep="\t", engine='python')
-    required_cols = ["sanger_sample_id_rnaseq", "sanger_sample_id_wgs", "USUBJID"]
+    rna_wgs_key = pd.read_csv(key_path, sep=sep, engine='python')
+    required_cols = [rna_col, wgs_col]
     check_required_columns(rna_wgs_key, required_cols)
-    rnaseq_counts = rna_wgs_key['sanger_sample_id_rnaseq'].value_counts()
+
+    rna_wgs_key = rna_wgs_key[required_cols].rename(columns={
+            rna_col: "RNA_sample_ID",
+            wgs_col: "WGS_sample_ID",
+        })
+
+    # Defensive check: a missing/blank value in either column is ambiguous under the
+    # new 2-column format (no fallback semantics), so drop such rows with a warning.
+    missing_mask = rna_wgs_key["RNA_sample_ID"].map(is_missing_token) | rna_wgs_key["WGS_sample_ID"].map(is_missing_token)
+    if missing_mask.any():
+        print(f"⚠️ Found {missing_mask.sum()} sample key rows with a missing/blank RNA or WGS sample ID; dropping them.")
+        rna_wgs_key = rna_wgs_key.loc[~missing_mask]
+
+    rnaseq_counts = rna_wgs_key['RNA_sample_ID'].value_counts()
     duplicates = rnaseq_counts[rnaseq_counts > 1]
 
     if duplicates.empty:
-        print("✅ All sanger_sample_id_rnaseq values are unique.")
+        print("✅ All rnaseq_sample_id values are unique.")
     else:
-        print("⚠️ Found non‑unique sanger_sample_id_rnaseq values:")
+        print("⚠️ Found non‑unique rnaseq_sample_id values:")
         print(duplicates)
 
-    # Fill empty WGS IDs with the prefix from the patient ID
-    empty_wgs = rna_wgs_key["sanger_sample_id_wgs"].isna() | (rna_wgs_key["sanger_sample_id_wgs"] == "NA") | (rna_wgs_key["sanger_sample_id_wgs"] == "")
-    rna_wgs_key.loc[empty_wgs, "sanger_sample_id_wgs"] = "NoWgsSangerID:" + rna_wgs_key["USUBJID"]
-
-    rna_wgs_key = rna_wgs_key[required_cols].rename(columns={
-            "sanger_sample_id_rnaseq": "RNA_sample_ID",
-            "sanger_sample_id_wgs": "WGS_sample_ID",
-        })
     return rna_wgs_key
 
 def combine_rna_wgs(
@@ -457,9 +467,24 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Combined HLA-LA WGS genotype file (one allele per row).",
     )
     parser.add_argument(
-        "--key-tsv",
+        "--sample-key",
         required=True,
-        help="RNA/WGS sample key TSV with sanger_sample_id_rnaseq, sanger_sample_id_wgs, USUBJID columns.",
+        help="RNA/WGS sample key file mapping each RNA sample to its matched WGS sample.",
+    )
+    parser.add_argument(
+        "--sample-key-sep",
+        default=",",
+        help="Field separator used in --sample-key.",
+    )
+    parser.add_argument(
+        "--sample-key-rna-col",
+        default="rnaseq_sample_id",
+        help="Column name for the RNA sample ID in --sample-key.",
+    )
+    parser.add_argument(
+        "--sample-key-wgs-col",
+        default="wgs_sample_id",
+        help="Column name for the WGS sample ID in --sample-key.",
     )
     parser.add_argument(
         "--rna-excluded-samples",
@@ -549,7 +574,12 @@ def main(argv: Optional[List[str]] = None) -> None:
         print(f"Removing WGS alleles for {len(wgs_excluded_samples)} blacklisted WGS samples")
         hla_wgs = hla_wgs[~hla_wgs["WGS_sample_ID"].isin(wgs_excluded_samples)]
 
-    rna_wgs_key = load_rna_wgs_key(args.key_tsv)
+    rna_wgs_key = load_rna_wgs_key(
+        args.sample_key,
+        sep=args.sample_key_sep,
+        rna_col=args.sample_key_rna_col,
+        wgs_col=args.sample_key_wgs_col,
+    )
 
     summary = combine_rna_wgs(hla_rna, hla_wgs, rna_wgs_key)
 

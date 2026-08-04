@@ -32,6 +32,7 @@ OUTDIR="${OUTDIR:-${RUN_DIR}/results}"
 NEXTFLOW_WORKDIR="${NEXTFLOW_WORKDIR:-${RUN_DIR}/nextflow.workdir}"
 NEXTFLOW_LOG="${NEXTFLOW_LOG:-${RUN_DIR}/testdata.log}"
 WGS_SAMPLESHEET="${WGS_SAMPLESHEET:-${ROOT_DIR}/assets/wgs_samples.csv}"
+RNA_WGS_KEY="${RNA_WGS_KEY:-${ROOT_DIR}/assets/rna_wgs_key.csv}"
 HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
 HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
@@ -66,5 +67,6 @@ nextflow -log "${NEXTFLOW_LOG}" \
     --hla_region "${HLA_REGION}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \
     --hlala_graph_dir "$HLALA_GRAPHS"  \
+    --sample_key "$RNA_WGS_KEY" \
     --outdir "${OUTDIR}" \
     "$@"

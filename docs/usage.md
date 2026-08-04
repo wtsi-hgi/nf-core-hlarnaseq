@@ -91,6 +91,37 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
+## RNA/WGS sample key input
+
+Optionally provide an RNA/WGS sample key with `--sample_key` to trigger HLA consensus calling across matched RNA and WGS samples from the same individual:
+
+```bash
+--sample_key '[path to sample key file]'
+```
+
+The sample key must be a comma-separated file with exactly these columns:
+
+```csv title="sample_key.csv"
+rnaseq_sample_id,wgs_sample_id
+RNA_SAMPLE_1,WGS_SAMPLE_1
+```
+
+| Column             | Description                                                          |
+| ------------------- | --------------------------------------------------------------------- |
+| `rnaseq_sample_id`  | RNA sample identifier; must match a `rna_id` from `--rna_samples`.     |
+| `wgs_sample_id`     | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
+
+One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample.
+
+`HLA_CONSENSUS` runs automatically once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It combines the arcasHLA RNA genotype calls with the HLA-LA WGS genotype calls, grouped by WGS sample, and calls a consensus HLA allele set per gene.
+
+Two further optional parameters let you drop specific samples from consensus calling without editing the RNA/WGS/HLA-LA inputs themselves:
+
+- `--rna_excluded_samples`: path to a plain-text file listing RNA sample IDs (one per line) to exclude.
+- `--wgs_excluded_samples`: path to a plain-text file listing WGS sample IDs (one per line) to exclude.
+
+`--hla_consensus_truncate_fields` (default `2`) controls how many colon-separated fields of each HLA allele are kept when comparing RNA and WGS calls (e.g. `02:07:01` truncated to 2 fields becomes `02:07`).
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:
