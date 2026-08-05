@@ -122,6 +122,28 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 `--hla_consensus_truncate_fields` (default `2`) controls how many colon-separated fields of each HLA allele are kept when comparing RNA and WGS calls (e.g. `02:07:01` truncated to 2 fields becomes `02:07`).
 
+## HLApm personalized HLA reference
+
+`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. This iteration stops at reference building; it does not run HLApm's downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope.
+
+Once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided, `--hlapm_repo` becomes **mandatory** (mirroring the existing `--hlala_graph_dir` requirement above): the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
+
+```bash
+--hlapm_repo '[path to a local HLApm checkout]'
+```
+
+`--hlapm_repo` must point to a local, pre-cloned checkout of [davenportlab/HLApm](https://github.com/davenportlab/HLApm) (including its bundled `data/references/` files). The pipeline never clones or fetches HLApm at runtime; the checkout must already exist at this path before the pipeline runs.
+
+`--hlapm_allowed_loci` (default `A,B,C,DRB1,DQA1,DQB1,DPA1,DPB1,DOA,DOB,G,E,F`) is a comma-separated allow-list of HLA loci (without the `HLA-` prefix) to include when building the HLApm input. `HLA_CONSENSUS` output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs; no separate audit/log file is written for excluded loci. This default is restricted to the loci HLApm's own per-allele locus regex can reliably parse — passing other loci through can crash the underlying R script.
+
+### HLApm Conda environment
+
+Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/HLA-LA sections above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples`, `--wgs_samples`, and `--sample_key`, prepare this environment yourself with:
+
+- R >= 4.1.0
+- CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
+- Bioconductor packages `Biostrings`, `rtracklayer`, `DECIPHER`
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:

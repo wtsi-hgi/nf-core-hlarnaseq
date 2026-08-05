@@ -217,6 +217,7 @@ workflow PIPELINE_COMPLETION {
 def validateInputParameters() {
     genomeExistsError()
     hlalaGraphDirExistsError()
+    hlapmRepoExistsError()
 }
 
 //
@@ -360,6 +361,18 @@ def hlalaGraphDirExistsError() {
 
     if (params.wgs_samples && !file(params.hlala_graph_dir).exists()) {
         error("Please check --hlala_graph_dir -> Directory does not exist: ${params.hlala_graph_dir}")
+    }
+}
+//
+// Exit pipeline if RNA/WGS/sample-key inputs are provided without a prepared HLApm checkout
+//
+def hlapmRepoExistsError() {
+    if (params.rna_samples && params.wgs_samples && params.sample_key && !params.hlapm_repo) {
+        error("Please provide --hlapm_repo when using --rna_samples, --wgs_samples, and --sample_key so HLApm can find its prepared repository checkout.")
+    }
+
+    if (params.rna_samples && params.wgs_samples && params.sample_key && !file(params.hlapm_repo).exists()) {
+        error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
     }
 }
 //

@@ -78,6 +78,13 @@
                     "help_text": "Passed through to the HLA_CONSENSUS step's `--truncate-fields` flag.",
                     "fa_icon": "fas fa-ruler"
                 },
+                "hlapm_allowed_loci": {
+                    "type": "string",
+                    "default": "A,B,C,DRB1,DQA1,DQB1,DPA1,DPB1,DOA,DOB,G,E,F",
+                    "description": "Comma-separated allow-list of HLA loci (without the 'HLA-' prefix) to include when building HLApm personalized-reference input.",
+                    "help_text": "Passed through to the HLAPM_PREPARE_INPUT step's `--allowed-loci` flag. HLA_CONSENSUS output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs, since HLApm's own per-allele locus regex cannot safely handle them.",
+                    "fa_icon": "fas fa-filter"
+                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",
@@ -128,6 +135,14 @@
                     "exists": true,
                     "description": "Path to the prepared HLA-LA graph parent directory.",
                     "help_text": "Required when `--wgs_samples` is provided. This path is passed to `HLA-LA.pl --customGraphDir` and must contain the prepared graph selected with `--hlala_graph`.",
+                    "fa_icon": "fas fa-folder-tree"
+                },
+                "hlapm_repo": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "exists": true,
+                    "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm).",
+                    "help_text": "Required when `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided (the same combination that triggers `HLA_CONSENSUS`). This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. The pipeline never clones or fetches HLApm at runtime; the checkout (including its bundled reference data) must be prepared by the operator beforehand.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "arcashla_genes": {

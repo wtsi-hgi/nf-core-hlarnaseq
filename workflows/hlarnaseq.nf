@@ -9,6 +9,7 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlar
 include { HLALA                  } from '../subworkflows/local/hlala'
 include { ARCASHLA                } from '../subworkflows/local/arcashla'
 include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
+include { HLAPM                  } from '../subworkflows/local/hlapm'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -33,6 +34,7 @@ workflow HLARNASEQ {
     ch_arcashla_combined_genotype = channel.empty()
     ch_hla_consensus_summary = channel.empty()
     ch_hla_consensus_key = channel.empty()
+    ch_hlapm_personalized_ref = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -68,6 +70,10 @@ workflow HLARNASEQ {
         ch_versions = ch_versions.mix(HLA_CONSENSUS.out.versions)
         ch_hla_consensus_summary = HLA_CONSENSUS.out.summary
         ch_hla_consensus_key = HLA_CONSENSUS.out.consensus
+
+        HLAPM(ch_hla_consensus_key)
+        ch_versions = ch_versions.mix(HLAPM.out.versions)
+        ch_hlapm_personalized_ref = HLAPM.out.personalized_ref
     }
 
     //
@@ -110,6 +116,7 @@ workflow HLARNASEQ {
     arcashla_combined_genotype = ch_arcashla_combined_genotype // channel: [ path(arcasHLA_combined.csv) ]
     hla_consensus_summary = ch_hla_consensus_summary // channel: [ path(hla_consensus.rna_wgs_rna-hla_with_consensus.tsv) ]
     hla_consensus_key = ch_hla_consensus_key // channel: [ path(hla_consensus.rna_wgs_hla_consensus.tsv) ]
+    hlapm_personalized_ref = ch_hlapm_personalized_ref // channel: [ path("out") ]
 
 }
 

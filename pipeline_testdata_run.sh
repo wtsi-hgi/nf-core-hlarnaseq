@@ -36,6 +36,7 @@ RNA_WGS_KEY="${RNA_WGS_KEY:-${ROOT_DIR}/assets/rna_wgs_key.csv}"
 HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
 HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
+HLAPM_DIR="${RUN_DIR}/HLApm/"
 
 mkdir -p "${RUN_DIR}"
 
@@ -68,5 +69,6 @@ nextflow -log "${NEXTFLOW_LOG}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \
     --hlala_graph_dir "$HLALA_GRAPHS"  \
     --sample_key "$RNA_WGS_KEY" \
+    --hlapm_repo "$HLAPM_DIR" \
     --outdir "${OUTDIR}" \
     "$@"

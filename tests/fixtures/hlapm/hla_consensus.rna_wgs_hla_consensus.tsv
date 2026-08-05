@@ -1,0 +1,7 @@
+WGS_sample_ID	HLA_gene	consensus_level	consensus_labels	consensus_alleles
+NA12878	HLA-A	4	wgs_id_exist|rna_consistent|wgs_alleles_exist|wgs_rna_mismatch	11:50Q,01:136
+NA12878	HLA-B	4	wgs_id_exist|rna_consistent|wgs_alleles_exist|wgs_rna_match	08:01,56:01
+NA12878	HLA-DRB1	4	wgs_id_exist|rna_empty|wgs_alleles_exist|wgs_only	01:01
+NA12878	HLA-DRB3	4	wgs_id_exist|rna_empty|wgs_alleles_exist|wgs_only	01:01
+RNA_ONLY:RNA_SAMPLE_1	HLA-A	1	wgs_id_missing	02:01,03:01
+RNA_ONLY:RNA_SAMPLE_1	HLA-DRB3	1	wgs_id_missing	01:01

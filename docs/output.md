@@ -16,6 +16,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [arcasHLA genotyping](#arcashla-genotyping) - HLA genotyping from validated RNA-seq reads
 - [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [HLA consensus](#hla-consensus) - RNA/WGS HLA consensus calling
+- [HLA personalized reference (HLApm)](#hla-personalized-reference-hlapm) - Personalized HLA reference building from consensus alleles
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -77,6 +78,20 @@ The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` c
 </details>
 
 `HLA_CONSENSUS` runs automatically when `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided (no dedicated boolean flag). It combines the `arcashla/arcasHLA_combined.csv` RNA genotype calls with the `hlala/HLA-LA_combined.tsv` WGS genotype calls via the RNA/WGS mapping supplied with `--sample_key`, and applies a decision tree (`consensus_level` 1-4, `consensus_labels`) to call a consensus HLA allele set per WGS group and gene, preferring WGS calls when RNA and WGS agree or partially agree, and falling back to RNA-only consensus when no matched WGS sample or WGS genotype exists. `--hla_consensus_truncate_fields` controls the HLA resolution used for comparison (default 2 fields, e.g. `02:07`). `--rna_excluded_samples`/`--wgs_excluded_samples` optionally drop specific samples from consensus calling.
+
+### HLA personalized reference (HLApm)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `hlapm/input/`
+  - `<WGS_sample_ID>.tsv`: per-individual, 2-column HLApm input (`individual_ID`, `HLA_allele`), derived from `hla_consensus.rna_wgs_hla_consensus.tsv`. Loci outside `--hlapm_allowed_loci` simply do not appear in this file; no separate audit file is produced.
+- `hlapm/personalized_ref/out/`
+  - `<individual_ID>/<allele>.fa`, `<individual_ID>/<allele>.gtf`: HLApm's native personalized-reference output layout (one FASTA and one GTF per allele per individual), published as-is.
+
+</details>
+
+`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. `--hlapm_repo` is mandatory in this case: the pipeline fails fast if it is missing or does not exist. It first converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV per WGS group (including synthetic `RNA_ONLY:<rna_id>` groups), filtered by the `--hlapm_allowed_loci` allow-list, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function, run inside a dedicated, operator-prepared `hlapm` Conda environment (see [usage docs](usage.md) for details). This iteration stops at reference building; HLApm's downstream STAR-index/mapping/allele-assignment stages and single-cell mode are out of scope.
 
 ### Pipeline information
 
