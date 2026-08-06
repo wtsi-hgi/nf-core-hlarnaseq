@@ -63,6 +63,7 @@ nextflow -log "${NEXTFLOW_LOG}" \
     run . \
     "${profile_args[@]}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
+    -profile singularity \
     -resume \
     --rna_samples "${RNA_SAMPLESHEET}" \
     --hla_region "${HLA_REGION}" \

@@ -1,0 +1,59 @@
+nextflow_workflow {
+
+    name "Test Subworkflow HLAPM_STAR_INDEX"
+    script "../main.nf"
+    workflow "HLAPM_STAR_INDEX"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "hlapm_star_index"
+
+    test("dedups identical alleles across samples, keeps differing same-named alleles distinct, ignores stray files, and tolerates HLApm's extra out/ nesting") {
+
+        options '-stub'
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                input[0] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/personalized_ref/out", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // 4 distinct content hashes: HLA-A_01_01 (unique to SAMPLE_A),
+            // HLA-B_shared (byte-identical in both samples, indexed once),
+            // and the two different HLA-C_ambiguous sequences that happen
+            // to share a name across SAMPLE_A/SAMPLE_B (must stay distinct).
+            assert workflow.out.index.size() == 4
+
+            def sampleAllelesText = file(workflow.out.sample_alleles[0]).text
+            def sampleAllelesRows = sampleAllelesText.readLines().drop(1).collect { it.split(',') }
+
+            // One row per original (sample, allele) occurrence: 3 for
+            // SAMPLE_A + 2 for SAMPLE_B, and the stray mask_these_genes.bed
+            // (which the fixture nests exactly as HLApm's own
+            // bulkRNA_build_personalized_HLA_ref() really does, one extra
+            // out/ level below what HLAPM_BUILD_REF emits) must not show up
+            // as a row.
+            assert sampleAllelesRows.size() == 5
+            assert !sampleAllelesText.contains('mask_these_genes')
+
+            def keyFor = { sample, allele -> sampleAllelesRows.find { it[0] == sample && it[1] == allele }[2] }
+
+            // The byte-identical shared allele maps to the same allele_key
+            // for both samples (deduplicated).
+            assert keyFor('SAMPLE_A', 'HLA-B_shared') == keyFor('SAMPLE_B', 'HLA-B_shared')
+
+            // The same allele *name* with different content across samples
+            // must NOT be silently merged into one shared allele_key.
+            assert keyFor('SAMPLE_A', 'HLA-C_ambiguous') != keyFor('SAMPLE_B', 'HLA-C_ambiguous')
+
+            assert file(workflow.out.versions[0]).exists()
+        }
+    }
+}

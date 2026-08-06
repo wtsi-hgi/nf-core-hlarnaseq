@@ -33,6 +33,9 @@ if (identical(HLAPM_HOME, "")) {
 }
 message("HLApm repo location: ", HLAPM_HOME)
 
+# This global variable is required by HLApm scripts to fuction correctly
+DIR_personalizedHLA <- HLAPM_HOME
+
 ### Command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 3) {

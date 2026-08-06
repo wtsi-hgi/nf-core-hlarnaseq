@@ -124,7 +124,7 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 ## HLApm personalized HLA reference
 
-`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. This iteration stops at reference building; it does not run HLApm's downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope.
+`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
 
 Once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided, `--hlapm_repo` becomes **mandatory** (mirroring the existing `--hlala_graph_dir` requirement above): the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
 
@@ -143,6 +143,18 @@ Building the personalized reference is invoked inside a dedicated Conda environm
 - R >= 4.1.0
 - CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
 - Bioconductor packages `Biostrings`, `rtracklayer`, `DECIPHER`
+
+### HLApm STAR index
+
+Immediately after `HLAPM` builds the personalized FASTA+GTF references, the pipeline builds a STAR genome index for every allele reference that actually exists under `hlapm/personalized_ref/out/<individual_ID>/*.fa` - the set of alleles indexed is discovered by scanning that output tree directly, not from the HLApm input TSV or the consensus calls, since HLApm can emit reference files for alleles not listed in its own input. Before indexing, allele references are deduplicated by a content hash (sha256 of FASTA+GTF): the same allele often recurs across multiple individuals, and hashing content (rather than trusting the allele name) avoids ever silently merging two different sequences that happen to share a name. See [output docs](output.md#hlapm-star-index) for the resulting `hlapm/star_index/` and `hlapm/star_index_targets/` layout, including how to look up which shared index applies to a given individual/allele via `sample_alleles.csv`.
+
+This step reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to **STAR 2.7.11b** - the same version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's own RNA-seq test data. Unlike arcasHLA/HLA-LA/HLApm above, STAR is **not** expected to already be available in an operator-prepared Conda environment on `$PATH`: run the pipeline with a container profile so Nextflow resolves STAR from the module's pinned container instead:
+
+```bash
+-profile singularity
+```
+
+`docker` works the same way. As a fallback, `-profile conda` lets Nextflow auto-create an isolated Conda environment from the module's pinned `environment.yml` (`bioconda::star=2.7.11b`) at run time instead of using a container; this has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended. This is a deliberate, scoped exception to this pipeline's general early-stage policy of assuming all tools come from an already-active Conda environment - every other step in the pipeline is unaffected.
 
 ## Running the pipeline
 

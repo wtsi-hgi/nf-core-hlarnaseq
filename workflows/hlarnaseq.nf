@@ -10,6 +10,7 @@ include { HLALA                  } from '../subworkflows/local/hlala'
 include { ARCASHLA                } from '../subworkflows/local/arcashla'
 include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
 include { HLAPM                  } from '../subworkflows/local/hlapm'
+include { HLAPM_STAR_INDEX       } from '../subworkflows/local/hlapm_star_index'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -35,6 +36,8 @@ workflow HLARNASEQ {
     ch_hla_consensus_summary = channel.empty()
     ch_hla_consensus_key = channel.empty()
     ch_hlapm_personalized_ref = channel.empty()
+    ch_hlapm_star_index = channel.empty()
+    ch_hlapm_star_index_sample_alleles = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -74,6 +77,11 @@ workflow HLARNASEQ {
         HLAPM(ch_hla_consensus_key)
         ch_versions = ch_versions.mix(HLAPM.out.versions)
         ch_hlapm_personalized_ref = HLAPM.out.personalized_ref
+
+        HLAPM_STAR_INDEX(ch_hlapm_personalized_ref)
+        ch_versions = ch_versions.mix(HLAPM_STAR_INDEX.out.versions)
+        ch_hlapm_star_index = HLAPM_STAR_INDEX.out.index
+        ch_hlapm_star_index_sample_alleles = HLAPM_STAR_INDEX.out.sample_alleles
     }
 
     //
@@ -117,6 +125,8 @@ workflow HLARNASEQ {
     hla_consensus_summary = ch_hla_consensus_summary // channel: [ path(hla_consensus.rna_wgs_rna-hla_with_consensus.tsv) ]
     hla_consensus_key = ch_hla_consensus_key // channel: [ path(hla_consensus.rna_wgs_hla_consensus.tsv) ]
     hlapm_personalized_ref = ch_hlapm_personalized_ref // channel: [ path("out") ]
+    hlapm_star_index = ch_hlapm_star_index // channel: [ val(meta), path("star") ], meta.id == allele_key
+    hlapm_star_index_sample_alleles = ch_hlapm_star_index_sample_alleles // channel: [ path("sample_alleles.csv") ]
 
 }
 

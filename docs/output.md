@@ -17,6 +17,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [HLA-LA](#hla-la) - HLA typing from WGS BAM inputs
 - [HLA consensus](#hla-consensus) - RNA/WGS HLA consensus calling
 - [HLA personalized reference (HLApm)](#hla-personalized-reference-hlapm) - Personalized HLA reference building from consensus alleles
+- [HLApm STAR index](#hlapm-star-index) - Deduplicated STAR genome indexing of personalized HLA allele references
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -92,6 +93,21 @@ The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` c
 </details>
 
 `HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. `--hlapm_repo` is mandatory in this case: the pipeline fails fast if it is missing or does not exist. It first converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV per WGS group (including synthetic `RNA_ONLY:<rna_id>` groups), filtered by the `--hlapm_allowed_loci` allow-list, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function, run inside a dedicated, operator-prepared `hlapm` Conda environment (see [usage docs](usage.md) for details). This iteration stops at reference building; HLApm's downstream STAR-index/mapping/allele-assignment stages and single-cell mode are out of scope.
+
+### HLApm STAR index
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `hlapm/star_index_targets/`
+  - `unique_alleles.csv`: one row per distinct allele reference (`allele_key`, `representative_name`, `fasta`, `gtf`), discovered by scanning the actual `hlapm/personalized_ref/out/<individual_ID>/*.fa`/`*.gtf` files on disk (not any consensus/HLApm-input TSV) and deduplicated by a content hash (sha256) of each allele's FASTA+GTF. `allele_key` is `<representative_name>__<8-character hash prefix>`.
+  - `sample_alleles.csv`: one row per original `(individual_ID, allele)` occurrence (`sample`, `allele`, `allele_key`), mapping every individual's allele back to the shared `allele_key` it was indexed under. Use this file to find which `hlapm/star_index/<allele_key>/` directory applies to a given individual/allele - there is no per-individual STAR index directory.
+- `hlapm/star_index/`
+  - `<allele_key>/star/`: STAR genome index (`Genome`, `SA`, `SAindex`, etc.) for one distinct allele reference, built with `STAR --runMode genomeGenerate --sjdbOverhang 100`. Shared across every individual whose allele has that exact FASTA+GTF content, so a recurring allele (e.g. a common population allele) is indexed only once regardless of how many individuals carry it.
+
+</details>
+
+STAR indexing runs immediately after `HLAPM` builds the personalized references, deduplicating allele references by content (not by name) before indexing: HLApm's personalized-reference building does not explicitly guarantee that the same named allele call (e.g. `A*01:136`) is always byte-identical across individuals, so trusting name equality alone would risk silently indexing two different sequences as one. Indexing itself reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to STAR 2.7.11b (the version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's RNA-seq test data). Unlike the rest of this pipeline, STAR is not expected from an operator-prepared Conda environment: run the pipeline with `-profile singularity` (or `docker`/`conda`) so Nextflow can resolve STAR from the module's pinned container or `environment.yml` (see [usage docs](usage.md) for details). This iteration stops at indexing; aligning reads against these indexes (per individual, via `sample_alleles.csv`) is out of scope.
 
 ### Pipeline information
 
