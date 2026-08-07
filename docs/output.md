@@ -18,6 +18,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [HLA consensus](#hla-consensus) - RNA/WGS HLA consensus calling
 - [HLA personalized reference (HLApm)](#hla-personalized-reference-hlapm) - Personalized HLA reference building from consensus alleles
 - [HLApm STAR index](#hlapm-star-index) - Deduplicated STAR genome indexing of personalized HLA allele references
+- [HLApm STAR alignment](#hlapm-star-alignment) - STAR alignment of RNA reads against personalized per-sample-per-allele indexes
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -107,7 +108,26 @@ The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` c
 
 </details>
 
-STAR indexing runs immediately after `HLAPM` builds the personalized references, deduplicating allele references by content (not by name) before indexing: HLApm's personalized-reference building does not explicitly guarantee that the same named allele call (e.g. `A*01:136`) is always byte-identical across individuals, so trusting name equality alone would risk silently indexing two different sequences as one. Indexing itself reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to STAR 2.7.11b (the version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's RNA-seq test data). Unlike the rest of this pipeline, STAR is not expected from an operator-prepared Conda environment: run the pipeline with `-profile singularity` (or `docker`/`conda`) so Nextflow can resolve STAR from the module's pinned container or `environment.yml` (see [usage docs](usage.md) for details). This iteration stops at indexing; aligning reads against these indexes (per individual, via `sample_alleles.csv`) is out of scope.
+STAR indexing runs immediately after `HLAPM` builds the personalized references, deduplicating allele references by content (not by name) before indexing: HLApm's personalized-reference building does not explicitly guarantee that the same named allele call (e.g. `A*01:136`) is always byte-identical across individuals, so trusting name equality alone would risk silently indexing two different sequences as one. Indexing itself reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to STAR 2.7.11b (the version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's RNA-seq test data). Unlike the rest of this pipeline, STAR is not expected from an operator-prepared Conda environment: run the pipeline with `-profile singularity` (or `docker`/`conda`) so Nextflow can resolve STAR from the module's pinned container or `environment.yml` (see [usage docs](usage.md) for details). Aligning reads against these indexes is the next step, described immediately below.
+
+### HLApm STAR alignment
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `hlapm/star_align/`
+  - `rna_sample_alleles.csv`: one row per resolved `(rna_id, sample, allele, allele_key)` alignment target (`rna_id,sample,allele,allele_key`) - `sample` keeps the original `HLA_CONSENSUS` grouping id (WGS individual ID, or `RNA_ONLY:<rna_id>`) alongside the real RNA sample id it was resolved to via `--sample_key`, for traceability. This is the human-facing summary of exactly which personalized alleles are (or were) aligned for each RNA sample.
+  - `<rna_id>/<allele_key>/`: STAR alignment output for one `(RNA sample, allele)` pair, produced with `STAR --outSAMtype BAM SortedByCoordinate`:
+    - `<rna_id>.<allele_key>.sortedByCoord.out.bam`: coordinate-sorted alignment of that RNA sample's arcasHLA MHC-extracted reads against that single allele's STAR index.
+    - `<rna_id>.<allele_key>.Log.final.out`, `.Log.out`, `.Log.progress.out`: STAR's standard log outputs.
+
+</details>
+
+For every RNA sample that has one or more personalized HLA allele references, the pipeline aligns that sample's arcasHLA MHC-extracted reads (`ARCASHLA`'s `.mhc_1.fq.gz`/`.mhc_2.fq.gz`, not the full/raw RNA fastqs) against every one of its allele-specific STAR indexes: one alignment job per `(RNA sample, allele)` pair, so a sample with N personalized alleles produces N separate alignments that each reuse the same read pair against a different single-allele index.
+
+`hlapm/star_index_targets/sample_alleles.csv`'s `sample` column is keyed by `HLA_CONSENSUS`'s grouping id (the WGS individual ID for WGS-backed individuals, or a synthetic `RNA_ONLY:<rna_id>` token otherwise), not directly by RNA sample id. Before alignment, this is resolved back to real RNA sample ids using `--sample_key`: `RNA_ONLY:<rna_id>` rows resolve by prefix-stripping alone, while WGS-individual rows broadcast-join against every RNA sample `--sample_key` matches to that individual - a WGS individual matched to more than one RNA sample has its full allele set aligned separately against each of those RNA samples' own reads, rather than collapsed to one. The resolved mapping is published as `rna_sample_alleles.csv` above.
+
+This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/align) module unmodified, pinned to the same STAR 2.7.11b version used for indexing, and continues the same container/Conda exception described above. This iteration stops at producing per-sample-per-allele BAMs; HLA expression quantification from those BAMs, and reconciling alignments across candidate alleles into a single per-locus call, are out of scope.
 
 ### Pipeline information
 

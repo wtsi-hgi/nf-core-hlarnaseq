@@ -1,0 +1,4 @@
+sample,allele,allele_key
+WGS_1,HLA-A_01_01,HLA-A_01_01__abcd1234
+WGS_2,HLA-B_08_01,HLA-B_08_01__efgh5678
+RNA_ONLY:RNA_D,HLA-A_02_01,HLA-A_02_01__ijkl9012

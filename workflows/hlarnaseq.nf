@@ -11,6 +11,7 @@ include { ARCASHLA                } from '../subworkflows/local/arcashla'
 include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
 include { HLAPM                  } from '../subworkflows/local/hlapm'
 include { HLAPM_STAR_INDEX       } from '../subworkflows/local/hlapm_star_index'
+include { HLAPM_STAR_ALIGN       } from '../subworkflows/local/hlapm_star_align'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,7 +38,11 @@ workflow HLARNASEQ {
     ch_hla_consensus_key = channel.empty()
     ch_hlapm_personalized_ref = channel.empty()
     ch_hlapm_star_index = channel.empty()
+    ch_hlapm_star_index_gtf = channel.empty()
     ch_hlapm_star_index_sample_alleles = channel.empty()
+    ch_hlapm_star_align_bam = channel.empty()
+    ch_hlapm_star_align_log_final = channel.empty()
+    ch_hlapm_star_align_rna_sample_alleles = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -81,7 +86,20 @@ workflow HLARNASEQ {
         HLAPM_STAR_INDEX(ch_hlapm_personalized_ref)
         ch_versions = ch_versions.mix(HLAPM_STAR_INDEX.out.versions)
         ch_hlapm_star_index = HLAPM_STAR_INDEX.out.index
+        ch_hlapm_star_index_gtf = HLAPM_STAR_INDEX.out.gtf
         ch_hlapm_star_index_sample_alleles = HLAPM_STAR_INDEX.out.sample_alleles
+
+        HLAPM_STAR_ALIGN(
+            ch_hlapm_star_index_sample_alleles,
+            ch_hlapm_star_index,
+            ch_hlapm_star_index_gtf,
+            ch_arcashla_reads,
+            ch_sample_key
+        )
+        ch_versions = ch_versions.mix(HLAPM_STAR_ALIGN.out.versions)
+        ch_hlapm_star_align_bam = HLAPM_STAR_ALIGN.out.bam_sorted
+        ch_hlapm_star_align_log_final = HLAPM_STAR_ALIGN.out.log_final
+        ch_hlapm_star_align_rna_sample_alleles = HLAPM_STAR_ALIGN.out.rna_sample_alleles
     }
 
     //
@@ -126,7 +144,11 @@ workflow HLARNASEQ {
     hla_consensus_key = ch_hla_consensus_key // channel: [ path(hla_consensus.rna_wgs_hla_consensus.tsv) ]
     hlapm_personalized_ref = ch_hlapm_personalized_ref // channel: [ path("out") ]
     hlapm_star_index = ch_hlapm_star_index // channel: [ val(meta), path("star") ], meta.id == allele_key
+    hlapm_star_index_gtf = ch_hlapm_star_index_gtf // channel: [ val(meta), path(gtf) ], meta.id == allele_key
     hlapm_star_index_sample_alleles = ch_hlapm_star_index_sample_alleles // channel: [ path("sample_alleles.csv") ]
+    hlapm_star_align_bam = ch_hlapm_star_align_bam // channel: [ val(meta), path("*.sortedByCoord.out.bam") ]
+    hlapm_star_align_log_final = ch_hlapm_star_align_log_final // channel: [ val(meta), path("*.Log.final.out") ]
+    hlapm_star_align_rna_sample_alleles = ch_hlapm_star_align_rna_sample_alleles // channel: [ path("rna_sample_alleles.csv") ]
 
 }
 

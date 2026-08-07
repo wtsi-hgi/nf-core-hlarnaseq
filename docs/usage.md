@@ -156,6 +156,14 @@ This step reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/
 
 `docker` works the same way. As a fallback, `-profile conda` lets Nextflow auto-create an isolated Conda environment from the module's pinned `environment.yml` (`bioconda::star=2.7.11b`) at run time instead of using a container; this has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended. This is a deliberate, scoped exception to this pipeline's general early-stage policy of assuming all tools come from an already-active Conda environment - every other step in the pipeline is unaffected.
 
+### HLApm STAR alignment
+
+Immediately after the STAR indexes are built, the pipeline aligns each RNA sample's arcasHLA MHC-extracted reads (`ARCASHLA`'s `.mhc_1.fq.gz`/`.mhc_2.fq.gz`, not the full/raw RNA fastqs) against every one of that sample's personalized allele indexes. This produces one alignment job per `(RNA sample, allele)` pair: a sample with 3 personalized alleles gets 3 separate STAR alignments, each reusing the same read pair against a different single-allele index.
+
+`sample_alleles.csv`'s `sample` column is keyed by `HLA_CONSENSUS`'s grouping id (the WGS individual ID for WGS-backed individuals, or a synthetic `RNA_ONLY:<rna_id>` token otherwise) - not directly by RNA sample id. Before alignment, the pipeline resolves this back to real RNA sample ids using `--sample_key`: a WGS individual matched to more than one RNA sample in `--sample_key` has its full allele set aligned separately against each of those RNA samples' own reads (broadcast, not collapsed to one). This resolved mapping is published as `hlapm/star_align/rna_sample_alleles.csv` - see [output docs](output.md#hlapm-star-alignment) for its columns and for the alignment output layout.
+
+This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/align) module unmodified, pinned to the same **STAR 2.7.11b** version used for indexing above, and continues the same container/Conda exception described there (`-profile singularity`/`docker`/`conda`).
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:

@@ -1,0 +1,106 @@
+nextflow_process {
+
+    name "Test Process HLAPM_RESOLVE_SAMPLE_ALLELES"
+    script "../main.nf"
+    process "HLAPM_RESOLVE_SAMPLE_ALLELES"
+    tag "modules"
+    tag "modules_local"
+    tag "hlapm_resolve_sample_alleles"
+
+    test("resolves RNA_ONLY: prefix, single-match, and multi-RNA-per-WGS-individual rows") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_alleles.csv", checkIfExists: true))
+                input[1] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_key.csv", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.rna_sample_alleles_csv[0]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split(',') }
+
+            // WGS_1 is matched by two RNA samples (RNA_A, RNA_B) in
+            // --sample_key: its single allele row must broadcast to both,
+            // not collapse to one.
+            assert rows.size() == 4
+            assert rows.count { it[0] == 'RNA_A' && it[1] == 'WGS_1' && it[3] == 'HLA-A_01_01__abcd1234' } == 1
+            assert rows.count { it[0] == 'RNA_B' && it[1] == 'WGS_1' && it[3] == 'HLA-A_01_01__abcd1234' } == 1
+
+            // WGS_2 is matched by exactly one RNA sample (RNA_C).
+            assert rows.count { it[0] == 'RNA_C' && it[1] == 'WGS_2' && it[3] == 'HLA-B_08_01__efgh5678' } == 1
+
+            // RNA_ONLY:RNA_D resolves by prefix-stripping alone, no
+            // --sample_key lookup involved.
+            assert rows.count { it[0] == 'RNA_D' && it[1] == 'RNA_ONLY:RNA_D' && it[3] == 'HLA-A_02_01__ijkl9012' } == 1
+
+            assert file(process.out.versions[0]).exists()
+        }
+    }
+
+    test("resolves the last row correctly even when neither input file ends with a trailing newline") {
+
+        // Regression test: --sample_key and sample_alleles.csv are files a
+        // user (or an upstream process's `>>` redirection) can produce
+        // without a final trailing newline. A bare `while read; do ...;
+        // done` silently skips the last line in that case instead of
+        // failing loudly - both loops must guard against it.
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_alleles_no_trailing_newline.csv", checkIfExists: true))
+                input[1] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_key_no_trailing_newline.csv", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.rna_sample_alleles_csv[0]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split(',') }
+
+            // Both fixture files' only data row is their last line, with no
+            // trailing newline - if either while-read loop silently dropped
+            // it, this would come back empty instead of one resolved row.
+            assert rows.size() == 1
+            assert rows[0] == ['RNA_E', 'WGS_3', 'HLA-C_03_01', 'HLA-C_03_01__mnop3456']
+        }
+    }
+
+    test("hard-fails on a non-RNA_ONLY sample with no --sample_key match") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_alleles_unmatched.csv", checkIfExists: true))
+                input[1] = Channel.of(file("${projectDir}/tests/fixtures/hlapm/resolve_sample_alleles/sample_key.csv", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.failed },
+                { assert process.exitStatus == 1 }
+            )
+        }
+    }
+}

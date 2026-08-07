@@ -1,0 +1,88 @@
+nextflow_workflow {
+
+    name "Test Subworkflow HLAPM_STAR_ALIGN"
+    script "../main.nf"
+    workflow "HLAPM_STAR_ALIGN"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "hlapm_star_align"
+
+    test("fans out one STAR_ALIGN job per resolved (rna_id, allele_key) pair, reusing reads across a multi-allele sample and across a WGS individual matched to multiple RNA samples") {
+
+        options '-stub'
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/hlapm_star_align"
+
+                // sample_alleles.csv (HLAPM_STAR_INDEX.out.sample_alleles-shaped):
+                //   WGS_1 -> ALLELE_KEY_1               (matched by RNA_A and RNA_B)
+                //   WGS_2 -> ALLELE_KEY_2, ALLELE_KEY_3 (matched by RNA_C only - multi-allele sample)
+                //   RNA_ONLY:RNA_D -> ALLELE_KEY_4      (RNA-only, no WGS match)
+                input[0] = Channel.of(file("\${fixtures}/sample_alleles.csv", checkIfExists: true))
+
+                input[1] = Channel.of(
+                    [ [ id: 'ALLELE_KEY_1' ], file("\${fixtures}/index/ALLELE_KEY_1/star", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_2' ], file("\${fixtures}/index/ALLELE_KEY_2/star", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_3' ], file("\${fixtures}/index/ALLELE_KEY_3/star", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_4' ], file("\${fixtures}/index/ALLELE_KEY_4/star", checkIfExists: true) ]
+                )
+
+                input[2] = Channel.of(
+                    [ [ id: 'ALLELE_KEY_1' ], file("\${fixtures}/gtf/ALLELE_KEY_1.gtf", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_2' ], file("\${fixtures}/gtf/ALLELE_KEY_2.gtf", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_3' ], file("\${fixtures}/gtf/ALLELE_KEY_3.gtf", checkIfExists: true) ],
+                    [ [ id: 'ALLELE_KEY_4' ], file("\${fixtures}/gtf/ALLELE_KEY_4.gtf", checkIfExists: true) ]
+                )
+
+                input[3] = Channel.of(
+                    [ [ id: 'RNA_A' ], [ file("\${fixtures}/reads/RNA_A.mhc_1.fq.gz", checkIfExists: true), file("\${fixtures}/reads/RNA_A.mhc_2.fq.gz", checkIfExists: true) ] ],
+                    [ [ id: 'RNA_B' ], [ file("\${fixtures}/reads/RNA_B.mhc_1.fq.gz", checkIfExists: true), file("\${fixtures}/reads/RNA_B.mhc_2.fq.gz", checkIfExists: true) ] ],
+                    [ [ id: 'RNA_C' ], [ file("\${fixtures}/reads/RNA_C.mhc_1.fq.gz", checkIfExists: true), file("\${fixtures}/reads/RNA_C.mhc_2.fq.gz", checkIfExists: true) ] ],
+                    [ [ id: 'RNA_D' ], [ file("\${fixtures}/reads/RNA_D.mhc_1.fq.gz", checkIfExists: true), file("\${fixtures}/reads/RNA_D.mhc_2.fq.gz", checkIfExists: true) ] ]
+                )
+
+                input[4] = Channel.of(file("\${fixtures}/sample_key.csv", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            def rnaSampleAllelesText = file(workflow.out.rna_sample_alleles[0]).text
+            def rnaSampleAllelesRows = rnaSampleAllelesText.readLines().drop(1).collect { it.split(',') }
+
+            // Exactly the 5 resolved (rna_id, sample, allele, allele_key)
+            // rows expected: no row silently dropped, no row duplicated.
+            assert rnaSampleAllelesRows.size() == 5
+            assert rnaSampleAllelesRows.count { it[0] == 'RNA_A' && it[3] == 'ALLELE_KEY_1' } == 1
+            assert rnaSampleAllelesRows.count { it[0] == 'RNA_B' && it[3] == 'ALLELE_KEY_1' } == 1
+            assert rnaSampleAllelesRows.count { it[0] == 'RNA_C' && it[3] == 'ALLELE_KEY_2' } == 1
+            assert rnaSampleAllelesRows.count { it[0] == 'RNA_C' && it[3] == 'ALLELE_KEY_3' } == 1
+            assert rnaSampleAllelesRows.count { it[0] == 'RNA_D' && it[3] == 'ALLELE_KEY_4' } == 1
+
+            // One STAR_ALIGN job per resolved (rna_id, allele_key) pair -
+            // matches the resolved-row count above exactly (5), not the
+            // distinct allele_key count (4) and not the distinct rna_id
+            // count (4): RNA_C's two alleles must each get their own job
+            // while reusing RNA_C's single read pair.
+            assert workflow.out.bam_sorted.size() == 5
+
+            def bamIds = workflow.out.bam_sorted.collect { meta, bam -> meta.id }.sort()
+            assert bamIds == [
+                'RNA_A.ALLELE_KEY_1',
+                'RNA_B.ALLELE_KEY_1',
+                'RNA_C.ALLELE_KEY_2',
+                'RNA_C.ALLELE_KEY_3',
+                'RNA_D.ALLELE_KEY_4'
+            ].sort()
+
+            assert file(workflow.out.versions[0]).exists()
+        }
+    }
+}

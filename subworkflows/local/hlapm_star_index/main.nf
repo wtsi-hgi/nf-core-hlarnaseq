@@ -29,6 +29,7 @@ workflow HLAPM_STAR_INDEX {
 
     emit:
     index          = STAR_GENOMEGENERATE.out.index               // channel: [ val(meta), path("star") ], meta.id == allele_key
+    gtf            = ch_gtf                                       // channel: [ val(meta), path(gtf) ], meta.id == allele_key
     sample_alleles = HLAPM_LIST_STAR_TARGETS.out.sample_alleles_csv // channel: [ path("sample_alleles.csv") ]
     versions       = ch_versions
 }
