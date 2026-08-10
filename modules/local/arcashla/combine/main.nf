@@ -14,13 +14,19 @@ process ARCASHLA_COMBINE {
     path "versions.yml", emit: versions
 
     script:
-    def manifest = (0..<sample_ids.size()).collect { i -> "${sample_ids[i]}\t${genotype_jsons[i].name}" }.join('\n')
+    // `task.workDir` is not yet assigned while this `script:` preamble runs
+    // (Nextflow only creates/assigns the per-task work directory once the
+    // rendered script is known, since the script text feeds the task hash).
+    // The pipeline-level `workDir` is available at this point instead, so
+    // the manifest is written there under a per-task-unique name and
+    // referenced by its absolute path below - a single-line interpolation,
+    // not multi-line manifest content, so the bash template is not exposed
+    // to the indentation-desync bug this replaces.
+    def manifest_lines = (0..<sample_ids.size()).collect { i -> "${sample_ids[i]}\t${genotype_jsons[i].name}" }
+    def manifest_file  = workDir.resolve("arcashla_manifest_${UUID.randomUUID()}.tsv")
+    manifest_file.text = (manifest_lines + ['']).join('\n')
     """
-    cat > arcashla_manifest.tsv <<'EOF'
-    ${manifest}
-    EOF
-
-    combine_arcashla_genotypes.R arcashla_manifest.tsv arcasHLA_combined.csv
+    combine_arcashla_genotypes.R ${manifest_file} arcasHLA_combined.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

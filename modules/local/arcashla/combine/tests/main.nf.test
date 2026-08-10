@@ -1,0 +1,97 @@
+nextflow_process {
+
+    name "Test Process ARCASHLA_COMBINE"
+    script "../main.nf"
+    process "ARCASHLA_COMBINE"
+    tag "modules"
+    tag "modules_local"
+    tag "arcashla_combine"
+
+    test("combines genotype JSONs for 3 samples (regression test: multi-sample manifest generation)") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        ['sample1', 'sample2', 'sample3'],
+                        [
+                            file("${projectDir}/tests/fixtures/arcashla/combine/sample1_genotype.json", checkIfExists: true),
+                            file("${projectDir}/tests/fixtures/arcashla/combine/sample2_genotype.json", checkIfExists: true),
+                            file("${projectDir}/tests/fixtures/arcashla_empty_genotype.json", checkIfExists: true)
+                        ]
+                    )
+                )
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.csv[0]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split(',', -1) }
+
+            // one row per (sample, HLA gene): 21 HLA genes x 3 samples
+            assert rows.size() == 63
+
+            // sample1: fully genotyped at A, B, C
+            assert rows.count { it[0] == 'HLA-A' && it[1] == '01:01:01' && it[2] == '11:01:01' && it[3] == 'sample1' } == 1
+            assert rows.count { it[0] == 'HLA-B' && it[1] == '56:01:01' && it[2] == '08:01:01' && it[3] == 'sample1' } == 1
+            assert rows.count { it[0] == 'HLA-C' && it[1] == '07:01:01' && it[2] == '01:02:01' && it[3] == 'sample1' } == 1
+
+            // sample2: genotyped at A, B; C is absent from its JSON and must
+            // be padded with NA rather than dropped or misaligned.
+            assert rows.count { it[0] == 'HLA-A' && it[1] == '02:01:01' && it[2] == '03:01:01' && it[3] == 'sample2' } == 1
+            assert rows.count { it[0] == 'HLA-B' && it[1] == '07:02:01' && it[2] == '08:01:01' && it[3] == 'sample2' } == 1
+            assert rows.count { it[0] == 'HLA-C' && it[1] == 'NA' && it[2] == 'NA' && it[3] == 'sample2' } == 1
+
+            // sample3: empty genotype JSON ({}) must still produce a
+            // complete, NA-padded set of gene rows, not fail or be dropped.
+            assert rows.count { it[0] == 'HLA-A' && it[1] == 'NA' && it[2] == 'NA' && it[3] == 'sample3' } == 1
+
+            assert file(process.out.versions[0]).exists()
+        }
+    }
+
+    test("combines a single sample's genotype JSON (regression guard for the previously-working 1-sample path)") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        ['sample1'],
+                        [file("${projectDir}/tests/fixtures/arcashla/combine/sample1_genotype.json", checkIfExists: true)]
+                    )
+                )
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.csv[0]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split(',', -1) }
+
+            // one row per HLA gene for the single sample
+            assert rows.size() == 21
+            assert rows.count { it[0] == 'HLA-A' && it[1] == '01:01:01' && it[2] == '11:01:01' && it[3] == 'sample1' } == 1
+            assert rows.count { it[0] == 'HLA-B' && it[1] == '56:01:01' && it[2] == '08:01:01' && it[3] == 'sample1' } == 1
+            assert rows.count { it[0] == 'HLA-C' && it[1] == '07:01:01' && it[2] == '01:02:01' && it[3] == 'sample1' } == 1
+
+            assert file(process.out.versions[0]).exists()
+        }
+    }
+}
