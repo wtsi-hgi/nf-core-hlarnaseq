@@ -10,7 +10,7 @@
             "type": "object",
             "fa_icon": "fas fa-terminal",
             "description": "Define where the pipeline should find input data and save output data.",
-            "required": ["rna_samples", "hla_region", "outdir"],
+            "required": ["rna_samples", "hla_region", "outdir", "sample_key"],
             "properties": {
                 "rna_samples": {
                     "type": "string",
@@ -50,7 +50,7 @@
                     "mimetype": "text/csv",
                     "pattern": "^\\S+\\.csv$",
                     "description": "Path to comma-separated file mapping RNA samples to their matched WGS sample.",
-                    "help_text": "Optional RNA/WGS sample key with the exact columns rnaseq_sample_id,wgs_sample_id. One row per RNA sample with a matched WGS sample; RNA samples absent from this file are treated as having no WGS pairing. Required (together with --rna_samples and --wgs_samples) to trigger the HLA_CONSENSUS step. See [usage docs](https://nf-co.re/hlarnaseq/usage#rna-wgs-sample-key-input).",
+                    "help_text": "Required top-level input, with the exact columns rnaseq_sample_id,wgs_sample_id. One row per RNA sample with a matched WGS sample; RNA samples absent from this file (or when the file has zero data rows) are routed through the existing `RNA_ONLY:<rna_id>` consensus fallback path instead of being paired to a WGS sample. See [usage docs](https://nf-co.re/hlarnaseq/usage#rna-wgs-sample-key-input).",
                     "fa_icon": "fas fa-file-csv"
                 },
                 "rna_excluded_samples": {
@@ -142,7 +142,7 @@
                     "format": "directory-path",
                     "exists": true,
                     "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm).",
-                    "help_text": "Required when `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided (the same combination that triggers `HLA_CONSENSUS`). This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. The pipeline never clones or fetches HLApm at runtime; the checkout (including its bundled reference data) must be prepared by the operator beforehand.",
+                    "help_text": "Required whenever `--rna_samples` is provided, independent of `--wgs_samples`. This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. The pipeline never clones or fetches HLApm at runtime; the checkout (including its bundled reference data) must be prepared by the operator beforehand.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "arcashla_genes": {

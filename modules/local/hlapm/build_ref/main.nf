@@ -54,4 +54,23 @@ process HLAPM_BUILD_REF {
         HLApm: "\${hlapm_version}"
     END_VERSIONS
     """
+
+    stub:
+    def sample_tsv_args = (sample_tsvs instanceof List ? sample_tsvs : [sample_tsvs]).join(' ')
+    """
+    mkdir -p out
+
+    for sample_tsv in ${sample_tsv_args}; do
+        individual_id=\$(basename "\${sample_tsv}" .tsv)
+        mkdir -p "out/\${individual_id}"
+        printf '>placeholder_allele\\nACGT\\n' > "out/\${individual_id}/placeholder_allele.fa"
+        printf 'placeholder_allele\\tHLApm_stub\\texon\\t1\\t4\\t.\\t+\\t.\\tgene_id "placeholder_allele";\\n' > "out/\${individual_id}/placeholder_allele.gtf"
+    done
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        R: "unknown"
+        HLApm: "unknown"
+    END_VERSIONS
+    """
 }

@@ -58,9 +58,11 @@ workflow HLARNASEQ {
         HLALA(ch_wgs_samplesheet)
         ch_versions = ch_versions.mix(HLALA.out.versions)
         ch_hlala_combined = HLALA.out.combined_csv
+    } else {
+        ch_hlala_combined = Channel.fromPath("${projectDir}/assets/NO_WGS_HLALA_COMBINED.tsv")
     }
 
-    if (params.rna_samples && params.wgs_samples && params.sample_key) {
+    if (params.rna_samples && params.sample_key) {
         ch_rna_excluded_samples = params.rna_excluded_samples
             ? Channel.fromPath(params.rna_excluded_samples)
             : Channel.fromPath("${projectDir}/assets/NO_FILE")

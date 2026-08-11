@@ -25,7 +25,7 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
 - Validate the extracted paired FASTQ files before arcasHLA analysis
 - Call HLA reference alleles from RNASeq data with arcasHLA
 - (Optional) Call HLA reference alleles from WGS/WES data
-  - Call HLA allele consensus on RNASeq and WGS/WES data
+- Call HLA allele consensus on RNASeq and WGS/WES data
 - Map RNASeq data to personalized references
 - Extract HLA genes counts
 - Hijack original count matrix
@@ -33,7 +33,7 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
 ## Usage
 
 > [!NOTE]
-> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data.
+> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test -stub-run` before running the workflow on actual data. At this early development stage, `-profile test`'s bundled fixture is deliberately tiny and does not carry real HLA allele signal, so it is only validated in `-stub-run` mode (a process/channel wiring smoke test); a real, non-stub `-profile test` run is not expected to succeed yet.
 
 Provide an RNA samplesheet with the exact columns `rna_id,bam,bai,unpaired_r1,unpaired_r2`. The requested HLA region is passed to samtools unchanged, so its chromosome notation must match the BAM headers.
 

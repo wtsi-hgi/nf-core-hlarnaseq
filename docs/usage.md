@@ -93,7 +93,7 @@ nextflow run nf-core/hlarnaseq \
 
 ## RNA/WGS sample key input
 
-Optionally provide an RNA/WGS sample key with `--sample_key` to trigger HLA consensus calling across matched RNA and WGS samples from the same individual:
+`--sample_key` is a required top-level parameter whenever `--rna_samples` is provided. It maps RNA samples to their matched WGS sample (when one exists) for HLA consensus calling:
 
 ```bash
 --sample_key '[path to sample key file]'
@@ -111,9 +111,9 @@ RNA_SAMPLE_1,WGS_SAMPLE_1
 | `rnaseq_sample_id`  | RNA sample identifier; must match a `rna_id` from `--rna_samples`.     |
 | `wgs_sample_id`     | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
 
-One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample.
+One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file (or, when `--wgs_samples` is not provided at all, every RNA sample) is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample. A `--sample_key` file with zero data rows is valid and simply routes every RNA sample through the `RNA_ONLY:<rna_id>` fallback.
 
-`HLA_CONSENSUS` runs automatically once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It combines the arcasHLA RNA genotype calls with the HLA-LA WGS genotype calls, grouped by WGS sample, and calls a consensus HLA allele set per gene.
+`HLA_CONSENSUS` runs automatically whenever `--rna_samples` (and therefore `--sample_key`) are provided; there is no separate flag to enable it. `--wgs_samples` is optional and only affects whether WGS-derived alleles are available to blend into the consensus call for matched individuals - it does not affect whether `HLA_CONSENSUS` (or the downstream HLApm/STAR steps) run at all. When `--wgs_samples` is not provided, `HLA_CONSENSUS` combines the arcasHLA RNA genotype calls with an empty HLA-LA input, so every group falls back to `RNA_ONLY:<rna_id>` and the consensus call is RNA-only.
 
 Two further optional parameters let you drop specific samples from consensus calling without editing the RNA/WGS/HLA-LA inputs themselves:
 
@@ -124,9 +124,9 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 ## HLApm personalized HLA reference
 
-`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
+`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided, regardless of whether `--wgs_samples` is also provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
 
-Once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided, `--hlapm_repo` becomes **mandatory** (mirroring the existing `--hlala_graph_dir` requirement above): the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
+`--hlapm_repo` is **mandatory** whenever `--rna_samples` is provided (mirroring the existing `--hlala_graph_dir` requirement above), independent of `--wgs_samples`: the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
 
 ```bash
 --hlapm_repo '[path to a local HLApm checkout]'
@@ -138,7 +138,7 @@ Once `--rna_samples`, `--wgs_samples`, and `--sample_key` are all provided, `--h
 
 ### HLApm Conda environment
 
-Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/HLA-LA sections above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples`, `--wgs_samples`, and `--sample_key`, prepare this environment yourself with:
+Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/HLA-LA sections above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
 
 - R >= 4.1.0
 - CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
@@ -176,6 +176,9 @@ nextflow run nf-core/hlarnaseq \
 ```
 
 This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment, and a separate, dedicated `arcas-hla` Conda environment to be prepared as described above for arcasHLA genotyping.
+
+> [!NOTE]
+> `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.
 
 Note that the pipeline will create the following files in your working directory:
 

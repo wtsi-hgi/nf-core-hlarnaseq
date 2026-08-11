@@ -27,6 +27,18 @@ nextflow_pipeline {
                 { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.json").exists() },
                 { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.log").exists() },
                 { assert new File("$outputDir/arcashla/arcasHLA_combined.csv").exists() },
+                // Mandatory chain (ARCASHLA -> HLA_CONSENSUS -> HLAPM -> HLAPM_STAR_INDEX -> HLAPM_STAR_ALIGN)
+                // now runs for every --rna_samples/--sample_key run, regardless of --wgs_samples,
+                // exercised here in stub form via -profile test's header-only sample key/HLA-LA placeholder
+                // and placeholder --hlapm_repo.
+                { assert new File("$outputDir/hla_consensus/hla_consensus.rna_wgs_hla_consensus.tsv").exists() },
+                { assert new File("$outputDir/hla_consensus/hla_consensus.rna_wgs_rna-hla_with_consensus.tsv").text.contains('RNA_ONLY:RNA_SAMPLE_1') },
+                { assert !new File("$outputDir/hlapm/input").listFiles({ f -> f.name.endsWith('.tsv') } as FileFilter).toList().isEmpty() },
+                { assert !new File("$outputDir/hlapm/personalized_ref/out").listFiles().toList().isEmpty() },
+                { assert new File("$outputDir/hlapm/star_index_targets/sample_alleles.csv").exists() },
+                { assert !new File("$outputDir/hlapm/star_index").listFiles().toList().isEmpty() },
+                { assert new File("$outputDir/hlapm/star_align/rna_sample_alleles.csv").exists() },
+                { assert !new File("$outputDir/hlapm/star_align/RNA_SAMPLE_1").listFiles().toList().isEmpty() },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),

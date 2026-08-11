@@ -40,8 +40,13 @@ process ARCASHLA_COMBINE {
     """
 
     stub:
+    def stub_sample_ids = sample_ids instanceof List ? sample_ids : [sample_ids]
+    def stub_rows = stub_sample_ids.collect { sample_id -> "HLA-A,01:01,02:01,${sample_id}" }.join('\n')
     """
-    touch arcasHLA_combined.csv
+    cat <<-END_CSV > arcasHLA_combined.csv
+    HLA_gene,allele1_rna,allele2_rna,rna_sample_id
+    ${stub_rows}
+    END_CSV
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
