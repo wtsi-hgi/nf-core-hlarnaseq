@@ -23,11 +23,17 @@
                     "R": "unknown",
                     "HLApm": "unknown"
                 },
+                "HLAPM_COMBINE_GTF": {
+                    "bash": "5.1.16(1)-release"
+                },
                 "HLAPM_LIST_STAR_TARGETS": {
                     "bash": "5.1.16(1)-release"
                 },
                 "HLAPM_PREPARE_INPUT": {
                     "python3": "3.14.6"
+                },
+                "HLAPM_QUANTIFY_READS": {
+                    "python2": "unknown"
                 },
                 "HLAPM_RESOLVE_SAMPLE_ALLELES": {
                     "bash": "5.1.16(1)-release"
@@ -35,6 +41,9 @@
                 "HLA_CONSENSUS": {
                     "python3": "3.14.6",
                     "pandas": "3.0.3"
+                },
+                "SAMTOOLS_SORT": {
+                    "samtools": 1.24
                 },
                 "STAR_ALIGN": {
                     "gawk": "5.1.0",
@@ -72,6 +81,11 @@
                 "hlapm/personalized_ref/out/RNA_ONLY:RNA_SAMPLE_1",
                 "hlapm/personalized_ref/out/RNA_ONLY:RNA_SAMPLE_1/placeholder_allele.fa",
                 "hlapm/personalized_ref/out/RNA_ONLY:RNA_SAMPLE_1/placeholder_allele.gtf",
+                "hlapm/quantify",
+                "hlapm/quantify/RNA_SAMPLE_1",
+                "hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.edit_distance.tsv",
+                "hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.stat.txt",
+                "hlapm/quantify/combined.gtf",
                 "hlapm/star_align",
                 "hlapm/star_align/RNA_SAMPLE_1",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200",
@@ -86,6 +100,7 @@
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.Signal.UniqueMultiple.str1.out.bg",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.Signal.UniqueMultiple.str1.out.wig",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.out.sam",
+                "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.queryname.bam",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.sortedByCoord.out.bam",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.tab",
                 "hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.toTranscriptome.out.bam",
@@ -124,6 +139,9 @@
                 "RNA_ONLY:RNA_SAMPLE_1.tsv:md5,f92a3083b5904c63f0d0d3459d301689",
                 "placeholder_allele.fa:md5,49ba555556ea9b079047b65cfbd0a949",
                 "placeholder_allele.gtf:md5,4101a318bb0fbb342200389962b70b0c",
+                "RNA_SAMPLE_1.edit_distance.tsv:md5,0029298c43fb21e43e95f3095b1e2e81",
+                "RNA_SAMPLE_1.stat.txt:md5,985a60982cfc3d9230571e50afacdd5f",
+                "combined.gtf:md5,4101a318bb0fbb342200389962b70b0c",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.Aligned.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.Aligned.unsort.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.Chimeric.out.junction:md5,d41d8cd98f00b204e9800998ecf8427e",
@@ -135,6 +153,7 @@
                 "RNA_SAMPLE_1.placeholder_allele__96008200.Signal.UniqueMultiple.str1.out.bg:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.Signal.UniqueMultiple.str1.out.wig:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.out.sam:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "RNA_SAMPLE_1.placeholder_allele__96008200.queryname.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.sortedByCoord.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.tab:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "RNA_SAMPLE_1.placeholder_allele__96008200.toTranscriptome.out.bam:md5,d41d8cd98f00b204e9800998ecf8427e",
@@ -162,7 +181,7 @@
                 "unique_alleles.csv:md5,ddbd7d229db7edd91484fdd128609734"
             ]
         ],
-        "timestamp": "2026-08-10T17:00:22.944183131",
+        "timestamp": "2026-08-12T12:48:21.142691159",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.4"

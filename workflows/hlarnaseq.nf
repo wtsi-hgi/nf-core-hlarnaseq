@@ -12,6 +12,7 @@ include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
 include { HLAPM                  } from '../subworkflows/local/hlapm'
 include { HLAPM_STAR_INDEX       } from '../subworkflows/local/hlapm_star_index'
 include { HLAPM_STAR_ALIGN       } from '../subworkflows/local/hlapm_star_align'
+include { HLAPM_STAR_QUANTIFY    } from '../subworkflows/local/hlapm_star_quantify'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,6 +44,7 @@ workflow HLARNASEQ {
     ch_hlapm_star_align_bam = channel.empty()
     ch_hlapm_star_align_log_final = channel.empty()
     ch_hlapm_star_align_rna_sample_alleles = channel.empty()
+    ch_hlapm_edit_distance = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -102,6 +104,10 @@ workflow HLARNASEQ {
         ch_hlapm_star_align_bam = HLAPM_STAR_ALIGN.out.bam_sorted
         ch_hlapm_star_align_log_final = HLAPM_STAR_ALIGN.out.log_final
         ch_hlapm_star_align_rna_sample_alleles = HLAPM_STAR_ALIGN.out.rna_sample_alleles
+
+        HLAPM_STAR_QUANTIFY(ch_hlapm_star_align_bam, ch_hlapm_star_index_gtf)
+        ch_versions = ch_versions.mix(HLAPM_STAR_QUANTIFY.out.versions)
+        ch_hlapm_edit_distance = HLAPM_STAR_QUANTIFY.out.edit_distance
     }
 
     //
@@ -151,6 +157,7 @@ workflow HLARNASEQ {
     hlapm_star_align_bam = ch_hlapm_star_align_bam // channel: [ val(meta), path("*.sortedByCoord.out.bam") ]
     hlapm_star_align_log_final = ch_hlapm_star_align_log_final // channel: [ val(meta), path("*.Log.final.out") ]
     hlapm_star_align_rna_sample_alleles = ch_hlapm_star_align_rna_sample_alleles // channel: [ path("rna_sample_alleles.csv") ]
+    hlapm_edit_distance = ch_hlapm_edit_distance // channel: [ val(meta), path("*.edit_distance.tsv") ], meta.id == rna_id
 
 }
 

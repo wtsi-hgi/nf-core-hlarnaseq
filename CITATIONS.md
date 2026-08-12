@@ -22,6 +22,14 @@
 
 > Davenport Lab. HLApm: personalized HLA reference building for bulk and single-cell RNA-seq. GitHub repository: https://github.com/davenportlab/HLApm. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
 
+## [pybam](https://github.com/JohnLonginotto/pybam)
+
+> Longinotto J. pybam: a pure-Python BAM file reader. GitHub repository: https://github.com/JohnLonginotto/pybam. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+
+## [intervaltree](https://pypi.org/project/intervaltree/)
+
+> Tretyakov K, Halbert CL. intervaltree: Editable interval tree data structure for Python. PyPI package: https://pypi.org/project/intervaltree/. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+
 ## [SAMtools](https://doi.org/10.1093/gigascience/giab008)
 
 > Danecek P, Bonfield JK, Liddle J, Marshall J, Ohan V, Pollard MO, Whitwham A, Keane T, McCarthy SA, Davies RM, Li H. Twelve years of SAMtools and BCFtools. GigaScience. 2021;10(2):giab008. doi: 10.1093/gigascience/giab008.

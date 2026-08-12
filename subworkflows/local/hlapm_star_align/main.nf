@@ -71,7 +71,14 @@ workflow HLAPM_STAR_ALIGN {
     ch_versions = HLAPM_RESOLVE_SAMPLE_ALLELES.out.versions
 
     emit:
-    bam_sorted         = STAR_ALIGN.out.bam_sorted                       // channel: [ val(meta), path("*.sortedByCoord.out.bam") ]
+    bam_sorted         = STAR_ALIGN.out.bam_sorted_aligned               // channel: [ val(meta), path("*.Aligned.sortedByCoord.out.bam") ]
+                                                                          // Note: our own ext.args for STAR_ALIGN ("--outSAMtype BAM
+                                                                          // SortedByCoordinate", not combined with "Unsorted") makes STAR
+                                                                          // name its coordinate-sorted output with an "Aligned." infix, so
+                                                                          // it matches STAR_ALIGN's bam_sorted_aligned emit, not its plain
+                                                                          // bam_sorted emit (which is always empty for this ext.args
+                                                                          // combination and was only masked by -stub-run touching both
+                                                                          // filenames unconditionally).
     log_final          = STAR_ALIGN.out.log_final                       // channel: [ val(meta), path("*.Log.final.out") ]
     rna_sample_alleles = HLAPM_RESOLVE_SAMPLE_ALLELES.out.rna_sample_alleles_csv // channel: [ path("rna_sample_alleles.csv") ]
     versions           = ch_versions

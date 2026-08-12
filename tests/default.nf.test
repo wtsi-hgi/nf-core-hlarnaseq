@@ -39,6 +39,14 @@ nextflow_pipeline {
                 { assert !new File("$outputDir/hlapm/star_index").listFiles().toList().isEmpty() },
                 { assert new File("$outputDir/hlapm/star_align/rna_sample_alleles.csv").exists() },
                 { assert !new File("$outputDir/hlapm/star_align/RNA_SAMPLE_1").listFiles().toList().isEmpty() },
+                // HLAPM_STAR_QUANTIFY: queryname-sort + cohort-wide combined GTF +
+                // per-sample edit-distance quantification, exercised here in stub
+                // form via HLAPM_QUANTIFY_READS's stub: block and samtools/sort's
+                // own vendored stub: block.
+                { assert new File("$outputDir/hlapm/star_align/RNA_SAMPLE_1/placeholder_allele__96008200/RNA_SAMPLE_1.placeholder_allele__96008200.queryname.bam").exists() },
+                { assert new File("$outputDir/hlapm/quantify/combined.gtf").size() > 0 },
+                { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.edit_distance.tsv").size() > 0 },
+                { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.stat.txt").exists() },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
