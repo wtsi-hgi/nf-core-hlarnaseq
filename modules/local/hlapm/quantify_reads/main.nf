@@ -12,7 +12,13 @@ process HLAPM_QUANTIFY_READS {
     path "versions.yml",                                  emit: versions
 
     script:
-    def bam_list = (bams instanceof List ? bams : [bams])
+    // Sort alphabetically by filename so the output TSV's per-BAM columns
+    // are deterministic (not whatever order groupTuple() happened to
+    // deliver) and group all alleles of one locus in adjacent columns,
+    // loci themselves in sorted order - filenames are
+    // "<sample>.<LOCUS>_<allele>__<hash>.queryname.bam", so a plain
+    // alphabetical sort already achieves both.
+    def bam_list = (bams instanceof List ? bams : [bams]).sort { it.getName() }
     def bam_args = bam_list.collect { "\"${it}\"" }.join(' ')
     """
     HLAPM_QUANTIFY_CONDA_ENV="hlapm-quantify"
@@ -46,7 +52,7 @@ process HLAPM_QUANTIFY_READS {
     """
 
     stub:
-    def bam_list = (bams instanceof List ? bams : [bams])
+    def bam_list = (bams instanceof List ? bams : [bams]).sort { it.getName() }
     def header_cols = (['read_name', 'gene_name_confidence', 'gene_name'] + bam_list.collect { it.getName() }).join('\t')
     def stub_row = (['stub_read_1', 'unique', 'placeholder_allele'] + bam_list.collect { 'NA' }).join('\t')
     """
