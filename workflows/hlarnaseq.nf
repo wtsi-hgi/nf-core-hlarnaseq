@@ -45,6 +45,7 @@ workflow HLARNASEQ {
     ch_hlapm_star_align_log_final = channel.empty()
     ch_hlapm_star_align_rna_sample_alleles = channel.empty()
     ch_hlapm_edit_distance = channel.empty()
+    ch_hlapm_gene_summary = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -108,6 +109,7 @@ workflow HLARNASEQ {
         HLAPM_STAR_QUANTIFY(ch_hlapm_star_align_bam, ch_hlapm_star_index_gtf)
         ch_versions = ch_versions.mix(HLAPM_STAR_QUANTIFY.out.versions)
         ch_hlapm_edit_distance = HLAPM_STAR_QUANTIFY.out.edit_distance
+        ch_hlapm_gene_summary = HLAPM_STAR_QUANTIFY.out.gene_summary
     }
 
     //
@@ -158,6 +160,7 @@ workflow HLARNASEQ {
     hlapm_star_align_log_final = ch_hlapm_star_align_log_final // channel: [ val(meta), path("*.Log.final.out") ]
     hlapm_star_align_rna_sample_alleles = ch_hlapm_star_align_rna_sample_alleles // channel: [ path("rna_sample_alleles.csv") ]
     hlapm_edit_distance = ch_hlapm_edit_distance // channel: [ val(meta), path("*.edit_distance.tsv") ], meta.id == rna_id
+    hlapm_gene_summary = ch_hlapm_gene_summary // channel: [ val(meta), path("*.HLA_gene_summary.tsv") ], meta.id == rna_id
 
 }
 

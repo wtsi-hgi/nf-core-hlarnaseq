@@ -22,6 +22,10 @@
 
 > Davenport Lab. HLApm: personalized HLA reference building for bulk and single-cell RNA-seq. GitHub repository: https://github.com/davenportlab/HLApm. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
 
+## [davenportlab/HLApm_farm_pipeline](https://github.com/davenportlab/HLApm_farm_pipeline)
+
+> Davenport Lab. HLApm_farm_pipeline: farm-oriented processing scripts accompanying HLApm, including `04_04_24_summarize_readcounts_script.R`, the basis for this pipeline's `bin/summarize_hla_readcounts.R` gene-level read-count summarization script. GitHub repository: https://github.com/davenportlab/HLApm_farm_pipeline. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+
 ## [pybam](https://github.com/JohnLonginotto/pybam)
 
 > Longinotto J. pybam: a pure-Python BAM file reader. GitHub repository: https://github.com/JohnLonginotto/pybam. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.

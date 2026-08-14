@@ -1,6 +1,7 @@
-include { SAMTOOLS_SORT         } from '../../../modules/nf-core/samtools/sort'
-include { HLAPM_COMBINE_GTF     } from '../../../modules/local/hlapm/combine_gtf'
-include { HLAPM_QUANTIFY_READS  } from '../../../modules/local/hlapm/quantify_reads'
+include { SAMTOOLS_SORT             } from '../../../modules/nf-core/samtools/sort'
+include { HLAPM_COMBINE_GTF         } from '../../../modules/local/hlapm/combine_gtf'
+include { HLAPM_QUANTIFY_READS      } from '../../../modules/local/hlapm/quantify_reads'
+include { HLAPM_SUMMARIZE_READCOUNTS } from '../../../modules/local/hlapm/summarize_readcounts'
 
 workflow HLAPM_STAR_QUANTIFY {
 
@@ -36,17 +37,23 @@ workflow HLAPM_STAR_QUANTIFY {
     // consumed by only the first sample.
     HLAPM_QUANTIFY_READS(ch_bams_by_sample, HLAPM_COMBINE_GTF.out.gtf.first())
 
+    // Turn each RNA sample's per-read edit-distance table into a per-gene
+    // read count.
+    HLAPM_SUMMARIZE_READCOUNTS(HLAPM_QUANTIFY_READS.out.edit_distance)
+
     // SAMTOOLS_SORT reports its own version via the topic-based `versions`
     // channel (like STAR_ALIGN/STAR_GENOMEGENERATE elsewhere in this
     // pipeline), collected automatically at the top-level workflow rather
     // than mixed in here.
     ch_versions = HLAPM_COMBINE_GTF.out.versions
         .mix(HLAPM_QUANTIFY_READS.out.versions)
+        .mix(HLAPM_SUMMARIZE_READCOUNTS.out.versions)
 
     emit:
     bam_queryname = SAMTOOLS_SORT.out.bam               // channel: [ val(meta), path("*.queryname.bam") ], meta.id == "${rna_id}.${allele_key}"
     edit_distance = HLAPM_QUANTIFY_READS.out.edit_distance // channel: [ val(meta), path("*.edit_distance.tsv") ], meta.id == rna_id
     stat          = HLAPM_QUANTIFY_READS.out.stat          // channel: [ val(meta), path("*.stat.txt") ], meta.id == rna_id
     combined_gtf  = HLAPM_COMBINE_GTF.out.gtf               // channel: [ path("combined.gtf") ]
+    gene_summary  = HLAPM_SUMMARIZE_READCOUNTS.out.gene_summary // channel: [ val(meta), path("*.HLA_gene_summary.tsv") ], meta.id == rna_id
     versions      = ch_versions
 }

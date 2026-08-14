@@ -168,17 +168,27 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
 
 Immediately after alignment, each per-`(RNA sample, allele)` coordinate-sorted BAM (`STAR_ALIGN`'s own output, above) is additionally queryname-sorted with [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) (`samtools sort -n`); `STAR_ALIGN`'s coordinate-sorted BAM is unchanged and continues to be published as before. Once every distinct allele's GTF (from HLApm STAR index, above) has been concatenated into one cohort-wide `combined.gtf` (comment lines stripped), the pipeline runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of per-allele queryname-sorted BAMs plus the combined GTF. For each read, this script assigns it to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing `<rna_id>.edit_distance.tsv` (one row per read, with a `unique`/`best`/`ambiguous` confidence label) plus a `<rna_id>.stat.txt` run-statistics log. See [output docs](output.md#hlapm-read-quantification) for the resulting `hlapm/quantify/` layout.
 
-This iteration stops at this per-read edit-distance table; it does **not** yet produce a gene-level read-count summary (`<rna_id>.HLA_gene_summary.tsv`) - that requires an additional R summarization step, deferred to a later iteration.
+Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_distance.tsv`, the pipeline runs a new `HLAPM_SUMMARIZE_READCOUNTS` step over that same table, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script). For each RNA sample, it keeps only non-`ambiguous` reads whose winning-gene edit distance is at or below `--hlapm_quantify_max_edit_distance` (default `16`, matching the source script's hardcoded threshold), then counts the surviving reads per gene, producing `<rna_id>.HLA_gene_summary.tsv` (columns: `gene_name`, `n_reads_mapping`). This closes the "stops at the per-read table" gap left open by the earlier iteration; it runs inside the same `hlapm-quantify` Conda environment as `make_a_table_210804_allHLAgenes.py` (see below).
+
+`--hlapm_quantify_max_edit_distance` (default `16`) is passed straight through to this step as the maximum summed-mate edit distance (NM) a read may have and still count toward its assigned gene's read count.
+
+Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
 
 #### `hlapm-quantify` Conda environment
 
-Running `make_a_table_210804_allHLAgenes.py` is invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/`hlapm` sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/`hlapm` sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
 
 - Python 2
 - `pybam` (`pip install https://github.com/JohnLonginotto/pybam/zipball/master`)
 - `intervaltree` (PyPI)
+- R (>= 4.0, matching the `hlapm` env's floor)
+- CRAN packages `dplyr`, `tidyr`
 
-R packages for the later gene-level summarization step are not required by this iteration and will be added to this same environment in a later iteration.
+For example:
+
+```bash
+mamba install -n hlapm-quantify -c conda-forge r-base r-dplyr r-tidyr
+```
 
 ## Running the pipeline
 

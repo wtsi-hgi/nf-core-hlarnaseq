@@ -85,6 +85,13 @@
                     "help_text": "Passed through to the HLAPM_PREPARE_INPUT step's `--allowed-loci` flag. HLA_CONSENSUS output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs, since HLApm's own per-allele locus regex cannot safely handle them.",
                     "fa_icon": "fas fa-filter"
                 },
+                "hlapm_quantify_max_edit_distance": {
+                    "type": "integer",
+                    "default": 16,
+                    "description": "Maximum summed-mate edit distance (NM) for a read to count toward a gene's HLA read count.",
+                    "help_text": "Passed through to the HLAPM_SUMMARIZE_READCOUNTS step. Matches the source script's hardcoded best_map_dist_threshold, based on \"4 reads/100bp, as mapped in the original HGI pipeline\".",
+                    "fa_icon": "fas fa-ruler"
+                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",

@@ -47,6 +47,7 @@ nextflow_pipeline {
                 { assert new File("$outputDir/hlapm/quantify/combined.gtf").size() > 0 },
                 { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.edit_distance.tsv").size() > 0 },
                 { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.stat.txt").exists() },
+                { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.HLA_gene_summary.tsv").size() > 0 },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),

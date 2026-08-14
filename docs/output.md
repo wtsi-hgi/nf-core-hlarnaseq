@@ -19,7 +19,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [HLA personalized reference (HLApm)](#hla-personalized-reference-hlapm) - Personalized HLA reference building from consensus alleles
 - [HLApm STAR index](#hlapm-star-index) - Deduplicated STAR genome indexing of personalized HLA allele references
 - [HLApm STAR alignment](#hlapm-star-alignment) - STAR alignment of RNA reads against personalized per-sample-per-allele indexes
-- [HLApm read quantification](#hlapm-read-quantification) - Queryname-sorted BAMs, cohort-wide combined GTF, and per-read edit-distance/gene-assignment tables
+- [HLApm read quantification](#hlapm-read-quantification) - Queryname-sorted BAMs, cohort-wide combined GTF, per-read edit-distance/gene-assignment tables, and per-gene read-count summaries
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -128,7 +128,7 @@ For every RNA sample that has one or more personalized HLA allele references, th
 
 `hlapm/star_index_targets/sample_alleles.csv`'s `sample` column is keyed by `HLA_CONSENSUS`'s grouping id (the WGS individual ID for WGS-backed individuals, or a synthetic `RNA_ONLY:<rna_id>` token otherwise), not directly by RNA sample id. Before alignment, this is resolved back to real RNA sample ids using `--sample_key`: `RNA_ONLY:<rna_id>` rows resolve by prefix-stripping alone, while WGS-individual rows broadcast-join against every RNA sample `--sample_key` matches to that individual - a WGS individual matched to more than one RNA sample has its full allele set aligned separately against each of those RNA samples' own reads, rather than collapsed to one. The resolved mapping is published as `rna_sample_alleles.csv` above.
 
-This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/align) module unmodified, pinned to the same STAR 2.7.11b version used for indexing, and continues the same container/Conda exception described above. This iteration stops at producing per-sample-per-allele BAMs; reconciling alignments across candidate alleles into a single per-locus call remains out of scope. Read quantification from these BAMs is described immediately below - it currently stops short of a gene-level count (see [HLApm read quantification](#hlapm-read-quantification)).
+This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/align) module unmodified, pinned to the same STAR 2.7.11b version used for indexing, and continues the same container/Conda exception described above. This iteration stops at producing per-sample-per-allele BAMs; reconciling alignments across candidate alleles into a single per-locus call remains out of scope. Read quantification from these BAMs, including gene-level read counts, is described immediately below (see [HLApm read quantification](#hlapm-read-quantification)).
 
 ### HLApm read quantification
 
@@ -141,12 +141,13 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
   - `combined.gtf`: every distinct allele's GTF (from `hlapm/star_index/<allele_key>/`) concatenated into one cohort-wide file, with comment lines stripped. Built once per pipeline run, not once per RNA sample.
   - `<rna_id>/<rna_id>.edit_distance.tsv`: one row per read observed across that sample's full set of per-allele queryname-sorted BAMs, with columns `read_name`, `gene_name_confidence` (`unique`/`best`/`ambiguous`), `gene_name`, followed by one column per input BAM holding that read's summed-mates edit distance (NM) when it belongs to the winning gene, else `NA`.
   - `<rna_id>/<rna_id>.stat.txt`: run-statistics log (redirected stderr) for that sample's quantification run.
+  - `<rna_id>/<rna_id>.HLA_gene_summary.tsv`: per-gene read count derived from `<rna_id>.edit_distance.tsv`, with columns `gene_name` and `n_reads_mapping` (the number of non-`ambiguous` reads assigned to that gene with a winning-gene edit distance at or below `--hlapm_quantify_max_edit_distance`).
 
 </details>
 
 For every RNA sample, the pipeline queryname-sorts each of that sample's per-allele coordinate-sorted BAMs (`STAR_ALIGN`'s output, above) using the [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) module (`samtools sort -n`), then runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of queryname-sorted per-allele BAMs plus the cohort-wide `combined.gtf`. The script assigns each read to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing the per-read `edit_distance.tsv` table above. It runs inside a dedicated, operator-prepared `hlapm-quantify` Conda environment (see [usage docs](usage.md) for details).
 
-This iteration stops at this per-read edit-distance table. It does **not** yet produce a gene-level read-count summary (`<rna_id>.HLA_gene_summary.tsv`); that requires an additional R summarization step, deferred to a later iteration.
+A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the per-gene `<rna_id>.HLA_gene_summary.tsv` read-count summary described above, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script) and the same `hlapm-quantify` Conda environment. Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
 
 ### Pipeline information
 

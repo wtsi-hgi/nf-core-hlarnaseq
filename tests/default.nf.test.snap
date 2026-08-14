@@ -38,6 +38,11 @@
                 "HLAPM_RESOLVE_SAMPLE_ALLELES": {
                     "bash": "5.1.16(1)-release"
                 },
+                "HLAPM_SUMMARIZE_READCOUNTS": {
+                    "R": "unknown",
+                    "dplyr": "unknown",
+                    "tidyr": "unknown"
+                },
                 "HLA_CONSENSUS": {
                     "python3": "3.14.6",
                     "pandas": "3.0.3"
@@ -83,6 +88,7 @@
                 "hlapm/personalized_ref/out/RNA_ONLY:RNA_SAMPLE_1/placeholder_allele.gtf",
                 "hlapm/quantify",
                 "hlapm/quantify/RNA_SAMPLE_1",
+                "hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.HLA_gene_summary.tsv",
                 "hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.edit_distance.tsv",
                 "hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.stat.txt",
                 "hlapm/quantify/combined.gtf",
@@ -134,11 +140,12 @@
                 "pipeline_info/nf_core_hlarnaseq_software_versions.yml"
             ],
             [
-                "hla_consensus.rna_wgs_hla_consensus.tsv:md5,180373bb3c4b865a7b3f5b66a3ebd737",
-                "hla_consensus.rna_wgs_rna-hla_with_consensus.tsv:md5,c93f1e3fad3a84048dbaa0ea23599af4",
-                "RNA_ONLY:RNA_SAMPLE_1.tsv:md5,f92a3083b5904c63f0d0d3459d301689",
+                "hla_consensus.rna_wgs_hla_consensus.tsv:md5,f67bf27de8a0ee41ba0fa1fdbc96d484",
+                "hla_consensus.rna_wgs_rna-hla_with_consensus.tsv:md5,c089d676b1273b0f9d90aa830cd97d36",
+                "RNA_ONLY:RNA_SAMPLE_1.tsv:md5,a6b78fa301a1d94fa37f2d34a16a0ff2",
                 "placeholder_allele.fa:md5,49ba555556ea9b079047b65cfbd0a949",
                 "placeholder_allele.gtf:md5,4101a318bb0fbb342200389962b70b0c",
+                "RNA_SAMPLE_1.HLA_gene_summary.tsv:md5,26bc2c323c75b88188d23903be23e6be",
                 "RNA_SAMPLE_1.edit_distance.tsv:md5,0029298c43fb21e43e95f3095b1e2e81",
                 "RNA_SAMPLE_1.stat.txt:md5,985a60982cfc3d9230571e50afacdd5f",
                 "combined.gtf:md5,4101a318bb0fbb342200389962b70b0c",
@@ -181,7 +188,7 @@
                 "unique_alleles.csv:md5,ddbd7d229db7edd91484fdd128609734"
             ]
         ],
-        "timestamp": "2026-08-12T12:48:21.142691159",
+        "timestamp": "2026-08-14T09:01:10.044671806",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.4"
