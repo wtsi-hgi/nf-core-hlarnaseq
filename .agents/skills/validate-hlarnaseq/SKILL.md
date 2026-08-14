@@ -1,6 +1,6 @@
 ---
 name: validate-hlarnaseq
-description: Validate nf-core/hlarnaseq changes by running available nf-core, nf-test, remote Nextflow testdata via run_tests_remote, and pre-commit checks; review plan compliance; and write artifacts/3_validate.md with findings and residual risks.
+description: Validate nf-core/hlarnaseq changes by running available nf-core, nf-test, and pre-commit checks; review plan compliance; and write artifacts/3_validate.md with findings and residual risks.
 ---
 
 # Validate HLARNASeq Skill
@@ -15,7 +15,6 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 4. Run `.agents/skills/validate-hlarnaseq/scripts/validate.sh` unless the user requests narrower validation.
    - The Nextflow testdata smoke check must run on the remote VM via `./run_tests_remote`.
    - Do not replace it with local `nextflow run . -profile test` unless the user explicitly asks for local-only validation or remote access is blocked.
-   - By default, `run_tests_remote` skips downloading `results/` and `nextflow.workdir/`; set `DOWNLOAD_RESULTS=1` only when output inspection is required.
 5. Review changed files against the approved plan.
 6. Check for nf-core pipeline risks:
    - invalid channel contracts;

@@ -60,7 +60,13 @@ nextflow -log "${NEXTFLOW_LOG}" \
     -resume \
     --rna_samples "${RNA_SAMPLESHEET}" \
     --hla_region "${HLA_REGION}" \
+    --wgs_samples "${WGS_SAMPLESHEET}" \
+    --hlala_graph_dir "$HLALA_GRAPHS"  \
     --sample_key "$RNA_WGS_KEY" \
     --hlapm_repo "$HLAPM_DIR" \
     --outdir "${OUTDIR}" \
     "$@"
+
+# The HLA-LA run takes a long to complete, so for test runs you can remove the following options
+# --wgs_samples "${WGS_SAMPLESHEET}" \
+# --hlala_graph_dir "$HLALA_GRAPHS"  \
