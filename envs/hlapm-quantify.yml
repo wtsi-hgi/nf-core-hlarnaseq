@@ -1,0 +1,19 @@
+# nf-core/hlarnaseq: HLApm read-quantification environment.
+# Used by HLAPM_QUANTIFY_READS (modules/local/hlapm/quantify_reads) and
+# HLAPM_SUMMARIZE_READCOUNTS (modules/local/hlapm/summarize_readcounts) via
+# `conda run -n hlapm-quantify`, to run the legacy Python 2
+# bin/make_a_table_210804_allHLAgenes.py and bin/summarize_hla_readcounts.R.
+# Operator-prepared precondition - the pipeline never creates, updates, or
+# installs packages into this environment. See docs/environment_setup.md.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=2
+  - r-base>=4.0
+  - r-dplyr
+  - r-tidyr
+  - pip
+  - pip:
+      - intervaltree
+      - https://github.com/JohnLonginotto/pybam/zipball/master

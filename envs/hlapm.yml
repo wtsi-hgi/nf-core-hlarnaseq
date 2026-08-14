@@ -1,0 +1,23 @@
+# nf-core/hlarnaseq: HLApm personalized-reference-building environment.
+# Used by HLAPM_BUILD_REF (modules/local/hlapm/build_ref) via
+# `conda run -n hlapm`. Operator-prepared precondition - the pipeline
+# never creates, updates, or installs packages into this environment.
+# See docs/environment_setup.md.
+#
+# After creating this environment, you must still separately clone
+# davenportlab/HLApm (https://github.com/davenportlab/HLApm), including
+# its bundled data/references/ files, and pass the checkout path via
+# --hlapm_repo; the pipeline never clones or fetches HLApm at runtime.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base>=4.1.0
+  - bedtools
+  - r-dplyr
+  - r-stringr
+  - r-data.table
+  - r-seqinr
+  - bioconductor-biostrings
+  - bioconductor-rtracklayer
+  - bioconductor-decipher

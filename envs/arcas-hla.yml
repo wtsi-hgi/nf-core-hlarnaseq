@@ -1,0 +1,16 @@
+# nf-core/hlarnaseq: arcasHLA genotyping environment.
+# Used by ARCASHLA_GENOTYPE (modules/local/arcashla/genotype) via
+# `conda run -n arcas-hla`. Operator-prepared precondition - the pipeline
+# never creates, updates, or builds a reference into this environment.
+# kallisto is pinned: later kallisto releases break this arcasHLA
+# version's `kallisto pseudo` output parsing. See docs/environment_setup.md.
+#
+# After creating this environment, you must still separately run
+# `arcasHLA reference` inside it to build the IMGT/HLA + kallisto index
+# the pipeline's arcasHLA genotype calls will use.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioconda::arcas-hla=0.6.0
+  - bioconda::kallisto=0.44.0
