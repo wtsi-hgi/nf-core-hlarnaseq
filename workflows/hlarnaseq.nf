@@ -14,6 +14,7 @@ include { HLAPM_STAR_INDEX       } from '../subworkflows/local/hlapm_star_index'
 include { HLAPM_STAR_ALIGN       } from '../subworkflows/local/hlapm_star_align'
 include { HLAPM_STAR_QUANTIFY    } from '../subworkflows/local/hlapm_star_quantify'
 include { COUNTS_COMMONREF       } from '../subworkflows/local/counts_commonref'
+include { COUNTS_COMMONREF_HLA   } from '../subworkflows/local/counts_commonref_hla'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,6 +50,7 @@ workflow HLARNASEQ {
     ch_hlapm_gene_summary = channel.empty()
     ch_counts_commonref_gene_counts = channel.empty()
     ch_counts_commonref_summary = channel.empty()
+    ch_counts_commonref_hla_read_gene_assignments = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -71,6 +73,19 @@ workflow HLARNASEQ {
         COUNTS_COMMONREF(ch_rna_samplesheet, ch_gtf)
         ch_counts_commonref_gene_counts = COUNTS_COMMONREF.out.gene_counts
         ch_counts_commonref_summary = COUNTS_COMMONREF.out.summary
+
+        // Iteration 2 of "hijack original count matrix" (see docs/output.md):
+        // per-read featureCounts reconciliation input, run once per RNA
+        // sample against the HLA-region-restricted subset of that sample's
+        // original/common-reference BAM. Unlike COUNTS_COMMONREF above
+        // (deliberately independent of/parallel to ARCASHLA), this step
+        // consumes ARCASHLA_EXTRACT's own intermediate HLA-region BAM
+        // (ARCASHLA.out.hla_region_bam), so it must run after ARCASHLA - an
+        // intentional, necessary ordering dependency introduced by reusing
+        // that intermediate rather than re-extracting the HLA region again.
+        COUNTS_COMMONREF_HLA(ARCASHLA.out.hla_region_bam, ch_gtf)
+        ch_versions = ch_versions.mix(COUNTS_COMMONREF_HLA.out.versions)
+        ch_counts_commonref_hla_read_gene_assignments = COUNTS_COMMONREF_HLA.out.read_gene_assignments
     }
 
     if (params.wgs_samples) {
@@ -179,6 +194,7 @@ workflow HLARNASEQ {
     hlapm_gene_summary = ch_hlapm_gene_summary // channel: [ val(meta), path("*.HLA_gene_summary.tsv") ], meta.id == rna_id
     counts_commonref_gene_counts = ch_counts_commonref_gene_counts // channel: [ val(meta), path("*featureCounts.tsv") ], meta.id == rna_id
     counts_commonref_summary = ch_counts_commonref_summary // channel: [ val(meta), path("*featureCounts.tsv.summary") ], meta.id == rna_id
+    counts_commonref_hla_read_gene_assignments = ch_counts_commonref_hla_read_gene_assignments // channel: [ val(meta), path("*.rnaseq_featurecounts.tsv") ], meta.id == rna_id
 
 }
 

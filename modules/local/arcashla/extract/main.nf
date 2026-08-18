@@ -11,6 +11,7 @@ process ARCASHLA_EXTRACT {
 
     output:
     tuple val(meta), path("${meta.id}.mhc_1.fq.gz"), path("${meta.id}.mhc_2.fq.gz"), emit: reads
+    tuple val(meta), path("${meta.id}.mhc.namesort.bam"), emit: bam
     path "versions.yml", emit: versions
 
     script:

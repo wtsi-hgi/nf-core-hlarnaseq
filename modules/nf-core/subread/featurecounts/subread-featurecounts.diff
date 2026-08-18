@@ -1,0 +1,40 @@
+Changes in component 'nf-core/subread/featurecounts'
+'modules/nf-core/subread/featurecounts/environment.yml' is unchanged
+Changes in 'subread/featurecounts/main.nf':
+--- modules/nf-core/subread/featurecounts/main.nf
++++ modules/nf-core/subread/featurecounts/main.nf
+@@ -13,7 +13,8 @@
+     output:
+     tuple val(meta), path("*featureCounts.tsv"), emit: counts
+     tuple val(meta), path("*featureCounts.tsv.summary"), emit: summary
+-    tuple val("${task.process}"), val('subread'), eval("featureCounts -v 2>&1 | sed 's/featureCounts v//'"), emit: versions_subread, topic: versions
++    tuple val(meta), path("*.featureCounts.bam"), emit: bam, optional: true
++    tuple val("${task.process}"), val('subread'), eval("featureCounts -v 2>&1 | sed -n 's/^featureCounts v//p'"), emit: versions_subread, topic: versions
+ 
+     when:
+     task.ext.when == null || task.ext.when
+@@ -43,8 +44,18 @@
+ 
+     stub:
+     def prefix = task.ext.prefix ?: "${meta.id}"
++    // -R BAM's reannotated-per-read output keeps each input BAM's own
++    // filename (with .featureCounts.bam appended), not `prefix` - only
++    // touched when ext.args actually requests -R BAM, so the un-changed,
++    // non-`-R BAM` call (e.g. COUNTS_COMMONREF's SUBREAD_FEATURECOUNTS) is
++    // unaffected.
++    def bam_list = (bams instanceof List ? bams : [bams])
++    def r_bam_stub = (task.ext.args ?: '').contains('-R BAM')
++        ? bam_list.collect { "touch ${it}.featureCounts.bam" }.join('\n    ')
++        : ''
+     """
+     touch ${prefix}.featureCounts.tsv
+     touch ${prefix}.featureCounts.tsv.summary
++    ${r_bam_stub}
+     """
+ }
+
+'modules/nf-core/subread/featurecounts/meta.yml' is unchanged
+'modules/nf-core/subread/featurecounts/tests/nextflow.config' is unchanged
+'modules/nf-core/subread/featurecounts/tests/main.nf.test' is unchanged
+'modules/nf-core/subread/featurecounts/tests/main.nf.test.snap' is unchanged
+************************************************************

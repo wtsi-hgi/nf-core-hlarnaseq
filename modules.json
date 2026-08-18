@@ -23,7 +23,8 @@
                     "subread/featurecounts": {
                         "branch": "master",
                         "git_sha": "c565f1b27c06a1e8b726e2a646d4c822ae3b514a",
-                        "installed_by": ["modules"]
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/subread/featurecounts/subread-featurecounts.diff"
                     }
                 }
             },

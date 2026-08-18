@@ -21,6 +21,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [HLApm STAR alignment](#hlapm-star-alignment) - STAR alignment of RNA reads against personalized per-sample-per-allele indexes
 - [HLApm read quantification](#hlapm-read-quantification) - Queryname-sorted BAMs, cohort-wide combined GTF, per-read edit-distance/gene-assignment tables, and per-gene read-count summaries
 - [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts) - Per-sample whole-genome featureCounts gene-count tables from each RNA sample's original BAM
+- [HLA-region per-read featureCounts reconciliation input](#hla-region-per-read-featurecounts-reconciliation-input) - Per-read, per-sample gene assignment table from the HLA-region-restricted subset of each RNA sample's original BAM
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -31,6 +32,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - `arcashla/extracted/`
   - `<rna_id>.mhc_1.fq.gz`: supplied read-1 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
   - `<rna_id>.mhc_2.fq.gz`: supplied read-2 FASTQ combined with complete BAM read pairs overlapping `--hla_region`.
+  - `<rna_id>.mhc.namesort.bam`: the HLA-region-restricted, primary-alignment-only (secondary/supplementary excluded), name-sorted BAM slice of that sample's original BAM that `<rna_id>.mhc_1/2.fq.gz` are themselves derived from (before FASTQ conversion and merging with the supplied `unpaired_r1`/`unpaired_r2` reads). Published as a side effect of this file already being produced internally; it is also consumed directly by [HLA-region per-read featureCounts reconciliation input](#hla-region-per-read-featurecounts-reconciliation-input), below.
 - `arcashla/validation/`
   - `<rna_id>.validatefastq.log`: pairing-validation report for the extracted FASTQ files.
 
@@ -162,6 +164,19 @@ A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the 
 </details>
 
 For every RNA sample, independent of `--sample_key`/HLApm, the pipeline runs the [nf-core/modules `SUBREAD_FEATURECOUNTS`](https://github.com/nf-core/modules/tree/master/modules/nf-core/subread/featurecounts) module unmodified, pinned to Subread 2.1.1, once per sample against that sample's own original BAM plus the single, cohort-wide `--gtf` reference. `--rnaseq_strandedness` (default `reverse`, pipeline-wide rather than per-sample) is merged into each sample's metadata immediately beforehand. This is **not yet reconciled** against `HLAPM_STAR_QUANTIFY`'s HLA-specific gene counts above - that reconciliation ("hijack original count matrix") is a future iteration. See [usage docs](usage.md#whole-genome-common-reference-gene-counts) for the container/`-profile conda` dependency this step introduces.
+
+### HLA-region per-read featureCounts reconciliation input
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `counts_commonref_hla/<rna_id>/`
+  - `<rna_id>.rnaseq_featurecounts.tsv`: one row per HLA-region read assigned to a gene, with columns `read_name`, `direction` (`R1`/`R2`/`NA`), `gene_name`, `edit_distance`. This is an **intermediate artifact** for a future reconciliation step ("hijack original count matrix"), not a final HLA gene-count table.
+  - `<rna_id>.featureCounts.tsv.summary`: featureCounts' own per-sample assignment summary log for this step's `-R BAM` run.
+
+</details>
+
+For every RNA sample, independent of `--sample_key`/HLApm, the pipeline runs `SUBREAD_FEATURECOUNTS` a second time (aliased as `SUBREAD_FEATURECOUNTS_HLA`) with `-R BAM`, directly against `arcashla/extracted/<rna_id>.mhc.namesort.bam` above (the HLA-region-restricted subset of that sample's original BAM, reused from `ARCASHLA_EXTRACT` rather than re-extracted) plus the same cohort-wide `--gtf` reference used above - no separate HLA-only GTF is built. The reannotated per-read BAM this produces is converted to plain text with `samtools view`, filtered to `Assigned`-status lines, and reformatted by a new `bin/reformat_rnaseq_featurecounts.py` script into the per-read TSV documented above. Reconciling this table against `HLAPM_STAR_QUANTIFY`'s HLA-specific `edit_distance.tsv` (above), and the final splice into `counts_commonref`'s whole-genome table, are both explicitly out of scope for this iteration - see [usage docs](usage.md#hla-region-per-read-featurecounts-reconciliation-input).
 
 ### Pipeline information
 

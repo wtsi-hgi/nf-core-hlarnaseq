@@ -23,6 +23,14 @@ nextflow_pipeline {
                 { assert workflow.success},
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_1.fq.gz").size() > 0 },
                 { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc_2.fq.gz").size() > 0 },
+                // ARCASHLA_EXTRACT's own previously-undeclared intermediate
+                // (HLA-region-restricted, primary-alignment-only,
+                // name-sorted BAM slice), now a declared output, published
+                // as a side effect and consumed directly by
+                // COUNTS_COMMONREF_HLA below - exercised here via
+                // ARCASHLA_EXTRACT's real (unstubbed) script, same as the
+                // FASTQ outputs above.
+                { assert new File("$outputDir/arcashla/extracted/RNA_SAMPLE_1.mhc.namesort.bam").size() > 0 },
                 { assert new File("$outputDir/arcashla/validation/RNA_SAMPLE_1.validatefastq.log").text.contains('no errors found') },
                 { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.json").exists() },
                 { assert new File("$outputDir/arcashla/genotype/RNA_SAMPLE_1.genotype.log").exists() },
@@ -54,6 +62,17 @@ nextflow_pipeline {
                 // SUBREAD_FEATURECOUNTS's own vendored stub: block.
                 { assert new File("$outputDir/counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv").exists() },
                 { assert new File("$outputDir/counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv.summary").exists() },
+                // COUNTS_COMMONREF_HLA: iteration 2 of "hijack original count
+                // matrix" - featureCounts -R BAM run once per RNA sample
+                // against ARCASHLA_EXTRACT's HLA-region BAM (above) + --gtf,
+                // reformatted into a per-read gene-assignment TSV. Exercised
+                // here in stub form via SUBREAD_FEATURECOUNTS_HLA's own
+                // vendored stub: block (touching a placeholder
+                // *.featureCounts.bam) and COUNTS_COMMONREF_HLA_REFORMAT's
+                // own stub: block (since its real script would otherwise
+                // need to parse that stubbed placeholder's content).
+                { assert new File("$outputDir/counts_commonref_hla/RNA_SAMPLE_1/RNA_SAMPLE_1.rnaseq_featurecounts.tsv").exists() },
+                { assert new File("$outputDir/counts_commonref_hla/RNA_SAMPLE_1/RNA_SAMPLE_1.rnaseq_featurecounts.tsv").text.contains('read_name\tdirection\tgene_name\tedit_distance') },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),

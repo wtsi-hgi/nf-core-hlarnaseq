@@ -42,5 +42,6 @@ workflow ARCASHLA {
     genotypes         = ARCASHLA_GENOTYPE.out.genotype
     genotype_logs     = ARCASHLA_GENOTYPE.out.log
     combined_genotype = ARCASHLA_COMBINE.out.csv
+    hla_region_bam    = ARCASHLA_EXTRACT.out.bam // channel: [ val(meta), path("*.mhc.namesort.bam") ], meta.id == rna_id - HLA-region-restricted, primary-alignment-only, name-sorted BAM (pre-FASTQ-conversion intermediate), not the reads/FASTQ output above
     versions          = ch_versions
 }

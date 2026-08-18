@@ -1,0 +1,67 @@
+nextflow_workflow {
+
+    name "Test Subworkflow COUNTS_COMMONREF_HLA"
+    script "../main.nf"
+    workflow "COUNTS_COMMONREF_HLA"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "counts_commonref_hla"
+
+    test("runs SUBREAD_FEATURECOUNTS_HLA once per RNA sample against the shared whole-genome GTF, then reformats the per-read Assigned lines into the final TSV") {
+
+        options '-stub'
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/rnaseq"
+
+                // Input shape here is [ val(meta), path(bam) ] - matching
+                // ARCASHLA.out.hla_region_bam, not ch_rna_samplesheet's own
+                // [ val(meta), path(bam), path(bai), [ unpaired_r1, unpaired_r2 ] ]
+                // shape (COUNTS_COMMONREF's own take). Reuses the same
+                // whole-genome BAM fixture as counts_commonref's own test,
+                // standing in for an already-HLA-region-extracted BAM
+                // (ARCASHLA_EXTRACT's own real output would already be
+                // region-restricted; this fixture is not, but that
+                // restriction is irrelevant to this subworkflow's own logic).
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1', single_end: false ],
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'RNA_SAMPLE_2', single_end: false ],
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam", checkIfExists: true)
+                    ]
+                )
+
+                input[1] = Channel.value(file("${projectDir}/tests/fixtures/placeholder.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // One SUBREAD_FEATURECOUNTS_HLA + COUNTS_COMMONREF_HLA_REFORMAT
+            // job per RNA sample, both sharing the one common --gtf
+            // reference.
+            assert workflow.out.read_gene_assignments.size() == 2
+
+            def ids = workflow.out.read_gene_assignments.collect { meta, tsv -> meta.id }.sort()
+            assert ids == ['RNA_SAMPLE_1', 'RNA_SAMPLE_2']
+
+            // params.rnaseq_strandedness (default 'reverse') is merged into
+            // each sample's meta immediately before SUBREAD_FEATURECOUNTS_HLA
+            // is called, same as COUNTS_COMMONREF.
+            def strandednessValues = workflow.out.read_gene_assignments.collect { meta, tsv -> meta.strandedness }.unique()
+            assert strandednessValues == ['reverse']
+
+            assert workflow.out.read_gene_assignments.every { meta, tsv -> file(tsv).exists() }
+        }
+    }
+}

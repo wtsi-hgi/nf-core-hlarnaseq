@@ -212,6 +212,14 @@ This step reuses the `SUBREAD_FEATURECOUNTS` module unmodified, pinned to **Subr
 
 See [output docs](output.md#whole-genome-common-reference-gene-counts) for the resulting `counts_commonref/` layout. Reconciling these whole-genome counts against `HLAPM_STAR_QUANTIFY`'s HLA-specific counts (the "hijack original count matrix" step) is explicitly out of scope for this iteration.
 
+## HLA-region per-read featureCounts reconciliation input
+
+Independent of `--sample_key`/HLApm, whenever `--rna_samples` is provided the pipeline also produces a per-read gene-assignment table for the HLA-region-restricted subset of each RNA sample's original BAM - the second of two steps toward the "hijack original count matrix" roadmap item. Unlike [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts) above (which is independent of/parallel to `ARCASHLA`), this step runs *after* `ARCASHLA`, because it reuses `ARCASHLA_EXTRACT`'s own intermediate HLA-region BAM (`arcashla/extracted/<rna_id>.mhc.namesort.bam`, see [output docs](output.md#arcashla-read-extraction-and-validation)) rather than extracting the HLA region a second time from scratch. No new region-extraction dependency is introduced by this step.
+
+`SUBREAD_FEATURECOUNTS` (aliased `SUBREAD_FEATURECOUNTS_HLA`, a second invocation of the same vendored module used above) runs with `-R BAM` against that intermediate BAM and the same cohort-wide `--gtf` reference already used above - no separate HLA-only GTF is built or required. This module has been patched (`nf-core modules patch subread/featurecounts`) to additionally capture the `-R BAM` per-read reannotated BAM as a declared output (previously an unexposed side effect of `-R BAM`); the patch also fixes an unrelated, pre-existing version-reporting defect (see `CHANGELOG.md`). The reannotated BAM is then converted to plain text with `samtools view`, filtered to `Assigned`-status lines, and reformatted into a `read_name`, `direction`, `gene_name`, `edit_distance` TSV by a new `bin/reformat_rnaseq_featurecounts.py` script - both steps only require `samtools`/`python3` on `$PATH`, already operator-Conda-environment preconditions elsewhere in this pipeline (unlike `SUBREAD_FEATURECOUNTS_HLA` itself, which continues the same container/`-profile conda` exception as `SUBREAD_FEATURECOUNTS` above).
+
+See [output docs](output.md#hla-region-per-read-featurecounts-reconciliation-input) for the resulting `counts_commonref_hla/` layout. This step stops at producing the per-read table: reconciling it against `HLAPM_STAR_QUANTIFY`'s HLA-specific `edit_distance.tsv`, and the final splice into `counts_commonref`'s whole-genome table (the "hijack" step itself), both remain out of scope for this iteration.
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:
