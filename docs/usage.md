@@ -172,7 +172,7 @@ Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_dis
 
 `--hlapm_quantify_max_edit_distance` (default `16`) is passed straight through to this step as the maximum summed-mate edit distance (NM) a read may have and still count toward its assigned gene's read count.
 
-Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
+Per-allele-level read counts and a cross-sample combined gene-count table remain out of scope for this iteration. A whole-genome `featureCounts` gene-count table is now produced independently (see [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts), below); reconciling it against these HLA-specific counts (the "hijack original count matrix" step) is a future iteration.
 
 #### `hlapm-quantify` Conda environment
 
@@ -189,6 +189,28 @@ For example:
 ```bash
 mamba install -n hlapm-quantify -c conda-forge r-base r-dplyr r-tidyr
 ```
+
+## Whole-genome common-reference gene counts
+
+Independent of `--sample_key`/HLApm, whenever `--rna_samples` is provided the pipeline also runs [nf-core/modules `SUBREAD_FEATURECOUNTS`](https://github.com/nf-core/modules/tree/master/modules/nf-core/subread/featurecounts) once per RNA sample, directly against that sample's original, full whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns) - not the arcasHLA MHC-extracted reads or HLApm personalized references used above. This reproduces, in-pipeline, the "original count matrix" half of the legacy prototype's `featureCounts` step, producing a per-sample whole-genome gene-count table without depending on an externally supplied count matrix file.
+
+`--gtf` is **mandatory** whenever `--rna_samples` is provided (mirroring the existing `--hlapm_repo` requirement above): the pipeline fails fast with a clear error if it is missing or does not exist.
+
+```bash
+--gtf '[path to a whole-genome reference GTF]'
+```
+
+`--rnaseq_strandedness` (default `reverse`) sets the RNA-seq library strandedness passed to featureCounts (`-s`); allowed values are `unstranded`, `forward`, or `reverse`. This is a single pipeline-wide value, not a per-sample `--rna_samples` column - a future cohort needing per-sample strandedness would require revisiting this as a samplesheet column.
+
+This step reuses the `SUBREAD_FEATURECOUNTS` module unmodified, pinned to **Subread 2.1.1**. As with `STAR_GENOMEGENERATE`/`STAR_ALIGN` above, Subread/featureCounts is **not** expected to already be available in an operator-prepared Conda environment on `$PATH`: run the pipeline with a container profile so Nextflow resolves it from the module's pinned container instead:
+
+```bash
+-profile singularity
+```
+
+`docker` works the same way. As a fallback, `-profile conda` lets Nextflow auto-create an isolated Conda environment from the module's pinned `environment.yml` (`bioconda::subread=2.1.1`) at run time instead of using a container; this has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended. This is the same deliberate, scoped exception to this pipeline's general early-stage policy already described for STAR above.
+
+See [output docs](output.md#whole-genome-common-reference-gene-counts) for the resulting `counts_commonref/` layout. Reconciling these whole-genome counts against `HLAPM_STAR_QUANTIFY`'s HLA-specific counts (the "hijack original count matrix" step) is explicitly out of scope for this iteration.
 
 ## Running the pipeline
 

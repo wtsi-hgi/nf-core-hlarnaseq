@@ -42,6 +42,10 @@
 
 > Dobin A, Davis CA, Schlesinger F, Drenkow J, Zaleski C, Jha S, Batut P, Chaisson M, Gingeras TR. STAR: ultrafast universal RNA-seq aligner. Bioinformatics. 2013 Jan 1;29(1):15-21. doi: 10.1093/bioinformatics/bts635.
 
+## [featureCounts (Subread)](https://doi.org/10.1093/bioinformatics/btt656)
+
+> Liao Y, Smyth GK, Shi W. featureCounts: an efficient general purpose program for assigning sequence reads to genomic features. Bioinformatics. 2014 Apr 1;30(7):923-30. doi: 10.1093/bioinformatics/btt656.
+
 ## Software packaging/containerisation tools
 
 - [Anaconda](https://anaconda.com)

@@ -20,6 +20,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [HLApm STAR index](#hlapm-star-index) - Deduplicated STAR genome indexing of personalized HLA allele references
 - [HLApm STAR alignment](#hlapm-star-alignment) - STAR alignment of RNA reads against personalized per-sample-per-allele indexes
 - [HLApm read quantification](#hlapm-read-quantification) - Queryname-sorted BAMs, cohort-wide combined GTF, per-read edit-distance/gene-assignment tables, and per-gene read-count summaries
+- [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts) - Per-sample whole-genome featureCounts gene-count tables from each RNA sample's original BAM
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### arcasHLA read extraction and validation
@@ -147,7 +148,20 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
 
 For every RNA sample, the pipeline queryname-sorts each of that sample's per-allele coordinate-sorted BAMs (`STAR_ALIGN`'s output, above) using the [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) module (`samtools sort -n`), then runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of queryname-sorted per-allele BAMs plus the cohort-wide `combined.gtf`. The script assigns each read to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing the per-read `edit_distance.tsv` table above. It runs inside a dedicated, operator-prepared `hlapm-quantify` Conda environment (see [usage docs](usage.md) for details).
 
-A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the per-gene `<rna_id>.HLA_gene_summary.tsv` read-count summary described above, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script) and the same `hlapm-quantify` Conda environment. Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
+A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the per-gene `<rna_id>.HLA_gene_summary.tsv` read-count summary described above, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script) and the same `hlapm-quantify` Conda environment. Per-allele-level read counts and a cross-sample combined gene-count table remain out of scope for this iteration; see [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts), below, for an independently produced whole-genome `featureCounts` table, and [usage docs](usage.md#whole-genome-common-reference-gene-counts) for why reconciling the two is a future iteration.
+
+### Whole-genome common-reference gene counts
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `counts_commonref/<rna_id>/`
+  - `<rna_id>.featureCounts.tsv`: featureCounts gene-count table for that RNA sample, produced by running featureCounts (`--countReadPairs -g gene_id`) directly against that sample's original, full whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam` column) and the whole-genome reference GTF supplied with `--gtf`.
+  - `<rna_id>.featureCounts.tsv.summary`: featureCounts' own per-sample assignment summary log.
+
+</details>
+
+For every RNA sample, independent of `--sample_key`/HLApm, the pipeline runs the [nf-core/modules `SUBREAD_FEATURECOUNTS`](https://github.com/nf-core/modules/tree/master/modules/nf-core/subread/featurecounts) module unmodified, pinned to Subread 2.1.1, once per sample against that sample's own original BAM plus the single, cohort-wide `--gtf` reference. `--rnaseq_strandedness` (default `reverse`, pipeline-wide rather than per-sample) is merged into each sample's metadata immediately beforehand. This is **not yet reconciled** against `HLAPM_STAR_QUANTIFY`'s HLA-specific gene counts above - that reconciliation ("hijack original count matrix") is a future iteration. See [usage docs](usage.md#whole-genome-common-reference-gene-counts) for the container/`-profile conda` dependency this step introduces.
 
 ### Pipeline information
 

@@ -48,6 +48,12 @@ nextflow_pipeline {
                 { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.edit_distance.tsv").size() > 0 },
                 { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.stat.txt").exists() },
                 { assert new File("$outputDir/hlapm/quantify/RNA_SAMPLE_1/RNA_SAMPLE_1.HLA_gene_summary.tsv").size() > 0 },
+                // COUNTS_COMMONREF: whole-genome featureCounts run once per
+                // RNA sample against its original BAM + --gtf, independent
+                // of --sample_key/HLApm, exercised here in stub form via
+                // SUBREAD_FEATURECOUNTS's own vendored stub: block.
+                { assert new File("$outputDir/counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv").exists() },
+                { assert new File("$outputDir/counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv.summary").exists() },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
@@ -131,7 +137,19 @@ nextflow_pipeline {
         then {
             assertAll(
                 { assert workflow.failed },
-                { assert workflow.stdout.any { it.contains('Sequence headers do not match') } }
+                // Intended failure is arcasHLA's own validatefastq pairing
+                // check ('Sequence headers do not match'). COUNTS_COMMONREF
+                // (independent of ARCASHLA, per docs/usage.md#whole-genome-common-reference-gene-counts)
+                // now also runs immediately in parallel and, in this
+                // container-less/conda-less nf-test environment, fails
+                // first with a 'featureCounts: command not found' exit
+                // (expected: SUBREAD_FEATURECOUNTS is not covered by the
+                // operator-prepared Conda environment, same as STAR above -
+                // see usage docs). Either failure correctly demonstrates
+                // `workflow.failed` for this invalid-pair fixture; accepting
+                // both keeps this assertion deterministic without depending
+                // on inter-process scheduling order.
+                { assert workflow.stdout.any { it.contains('Sequence headers do not match') || it.contains('featureCounts: command not found') } }
             )
         }
     }

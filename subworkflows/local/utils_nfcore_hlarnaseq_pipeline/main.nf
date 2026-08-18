@@ -218,6 +218,7 @@ def validateInputParameters() {
     genomeExistsError()
     hlalaGraphDirExistsError()
     hlapmRepoExistsError()
+    gtfExistsError()
 }
 
 //
@@ -373,6 +374,18 @@ def hlapmRepoExistsError() {
 
     if (params.rna_samples && params.sample_key && !file(params.hlapm_repo).exists()) {
         error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
+    }
+}
+//
+// Exit pipeline if RNA inputs are provided without a whole-genome reference GTF
+//
+def gtfExistsError() {
+    if (params.rna_samples && !params.gtf) {
+        error("Please provide --gtf when using --rna_samples so featureCounts can find the whole-genome reference annotation.")
+    }
+
+    if (params.rna_samples && !file(params.gtf).exists()) {
+        error("Please check --gtf -> File does not exist: ${params.gtf}")
     }
 }
 //

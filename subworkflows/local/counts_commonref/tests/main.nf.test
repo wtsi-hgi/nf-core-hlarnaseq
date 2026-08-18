@@ -1,0 +1,70 @@
+nextflow_workflow {
+
+    name "Test Subworkflow COUNTS_COMMONREF"
+    script "../main.nf"
+    workflow "COUNTS_COMMONREF"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "counts_commonref"
+
+    test("runs SUBREAD_FEATURECOUNTS once per RNA sample against the shared whole-genome GTF, merging in the pipeline-wide strandedness default") {
+
+        options '-stub'
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/rnaseq"
+
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1', single_end: false ],
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam", checkIfExists: true),
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam.bai", checkIfExists: true),
+                        [
+                            file("\${fixtures}/RNA_SAMPLE_1.unmapped_1.fastq.gz", checkIfExists: true),
+                            file("\${fixtures}/RNA_SAMPLE_1.unmapped_2.fastq.gz", checkIfExists: true)
+                        ]
+                    ],
+                    [
+                        [ id: 'RNA_SAMPLE_2', single_end: false ],
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam", checkIfExists: true),
+                        file("\${fixtures}/RNA_SAMPLE_1.Aligned.sortedByCoord.out.bam.bai", checkIfExists: true),
+                        [
+                            file("\${fixtures}/RNA_SAMPLE_1.unmapped_1.fastq.gz", checkIfExists: true),
+                            file("\${fixtures}/RNA_SAMPLE_1.unmapped_2.fastq.gz", checkIfExists: true)
+                        ]
+                    ]
+                )
+
+                input[1] = Channel.value(file("${projectDir}/tests/fixtures/placeholder.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            // One SUBREAD_FEATURECOUNTS job per RNA sample, both sharing the
+            // one common --gtf reference (bai/unpaired_reads dropped, not
+            // passed through to the module).
+            assert workflow.out.gene_counts.size() == 2
+            assert workflow.out.summary.size() == 2
+
+            def geneCountIds = workflow.out.gene_counts.collect { meta, counts -> meta.id }.sort()
+            assert geneCountIds == ['RNA_SAMPLE_1', 'RNA_SAMPLE_2']
+
+            // params.rnaseq_strandedness (default 'reverse') is merged into
+            // each sample's meta immediately before SUBREAD_FEATURECOUNTS is
+            // called, since the module reads meta.strandedness directly.
+            def strandednessValues = workflow.out.gene_counts.collect { meta, counts -> meta.strandedness }.unique()
+            assert strandednessValues == ['reverse']
+
+            assert workflow.out.gene_counts.every { meta, counts -> file(counts).exists() }
+            assert workflow.out.summary.every { meta, summary -> file(summary).exists() }
+        }
+    }
+}

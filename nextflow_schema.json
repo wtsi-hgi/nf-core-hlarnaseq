@@ -92,6 +92,14 @@
                     "help_text": "Passed through to the HLAPM_SUMMARIZE_READCOUNTS step. Matches the source script's hardcoded best_map_dist_threshold, based on \"4 reads/100bp, as mapped in the original HGI pipeline\".",
                     "fa_icon": "fas fa-ruler"
                 },
+                "rnaseq_strandedness": {
+                    "type": "string",
+                    "default": "reverse",
+                    "enum": ["unstranded", "forward", "reverse"],
+                    "description": "Library strandedness of the RNA-seq data, used by whole-genome featureCounts.",
+                    "help_text": "Pipeline-wide (not per-sample) value merged into each RNA sample's meta map immediately before running SUBREAD_FEATURECOUNTS, which reads meta.strandedness directly. Not exposed as a --rna_samples samplesheet column in this iteration.",
+                    "fa_icon": "fas fa-arrows-alt-h"
+                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",
@@ -151,6 +159,16 @@
                     "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm).",
                     "help_text": "Required whenever `--rna_samples` is provided, independent of `--wgs_samples`. This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. The pipeline never clones or fetches HLApm at runtime; the checkout (including its bundled reference data) must be prepared by the operator beforehand.",
                     "fa_icon": "fas fa-folder-tree"
+                },
+                "gtf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/plain",
+                    "pattern": "^\\S+\\.gtf(\\.gz)?$",
+                    "description": "Path to the whole-genome reference GTF used for per-sample featureCounts quantification.",
+                    "help_text": "Required whenever `--rna_samples` is provided. Passed to SUBREAD_FEATURECOUNTS as the annotation file run once per RNA sample against that sample's existing whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns), producing a per-sample whole-genome gene-count table. This is distinct from HLApm's per-allele GTFs, which cover only genotyped HLA alleles.",
+                    "fa_icon": "far fa-file-code"
                 },
                 "arcashla_genes": {
                     "type": "string",

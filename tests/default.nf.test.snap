@@ -60,6 +60,9 @@
                     "samtools": 1.24,
                     "star": null
                 },
+                "SUBREAD_FEATURECOUNTS": {
+                    "subread": "2.1.1"
+                },
                 "Workflow": {
                     "nf-core/hlarnaseq": "v1.0.0dev"
                 }
@@ -75,6 +78,10 @@
                 "arcashla/genotype/RNA_SAMPLE_1.genotype.log",
                 "arcashla/validation",
                 "arcashla/validation/RNA_SAMPLE_1.validatefastq.log",
+                "counts_commonref",
+                "counts_commonref/RNA_SAMPLE_1",
+                "counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv",
+                "counts_commonref/RNA_SAMPLE_1/RNA_SAMPLE_1.featureCounts.tsv.summary",
                 "hla_consensus",
                 "hla_consensus/hla_consensus.rna_wgs_hla_consensus.tsv",
                 "hla_consensus/hla_consensus.rna_wgs_rna-hla_with_consensus.tsv",
@@ -140,6 +147,8 @@
                 "pipeline_info/nf_core_hlarnaseq_software_versions.yml"
             ],
             [
+                "RNA_SAMPLE_1.featureCounts.tsv:md5,d41d8cd98f00b204e9800998ecf8427e",
+                "RNA_SAMPLE_1.featureCounts.tsv.summary:md5,d41d8cd98f00b204e9800998ecf8427e",
                 "hla_consensus.rna_wgs_hla_consensus.tsv:md5,f67bf27de8a0ee41ba0fa1fdbc96d484",
                 "hla_consensus.rna_wgs_rna-hla_with_consensus.tsv:md5,c089d676b1273b0f9d90aa830cd97d36",
                 "RNA_ONLY:RNA_SAMPLE_1.tsv:md5,a6b78fa301a1d94fa37f2d34a16a0ff2",
@@ -188,7 +197,7 @@
                 "unique_alleles.csv:md5,ddbd7d229db7edd91484fdd128609734"
             ]
         ],
-        "timestamp": "2026-08-14T09:01:10.044671806",
+        "timestamp": "2026-08-18T11:45:22.564541472",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.4"

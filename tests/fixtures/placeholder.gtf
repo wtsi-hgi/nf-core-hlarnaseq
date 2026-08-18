@@ -1,0 +1,4 @@
+#!genome-build placeholder
+#!genome-version placeholder
+chr1	placeholder	gene	1	100	.	+	.	gene_id "PLACEHOLDER_GENE_1"; gene_name "PLACEHOLDER_GENE_1";
+chr1	placeholder	exon	1	100	.	+	.	gene_id "PLACEHOLDER_GENE_1"; gene_name "PLACEHOLDER_GENE_1";

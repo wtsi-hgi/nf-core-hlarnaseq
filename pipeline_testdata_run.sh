@@ -37,6 +37,7 @@ HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
 HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
 HLAPM_DIR="${RUN_DIR}/HLApm/"
+GTF="${ROOT_DIR}/testdata-make/hlarnases-testdata/reference/gencode.v50.primary_assembly.annotation.gtf.gz"
 
 mkdir -p "${RUN_DIR}"
 
@@ -58,6 +59,7 @@ nextflow -log "${NEXTFLOW_LOG}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
     -profile singularity \
     -resume \
+    --gtf "$GTF" \
     --rna_samples "${RNA_SAMPLESHEET}" \
     --hla_region "${HLA_REGION}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \

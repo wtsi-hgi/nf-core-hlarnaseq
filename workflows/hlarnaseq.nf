@@ -13,6 +13,7 @@ include { HLAPM                  } from '../subworkflows/local/hlapm'
 include { HLAPM_STAR_INDEX       } from '../subworkflows/local/hlapm_star_index'
 include { HLAPM_STAR_ALIGN       } from '../subworkflows/local/hlapm_star_align'
 include { HLAPM_STAR_QUANTIFY    } from '../subworkflows/local/hlapm_star_quantify'
+include { COUNTS_COMMONREF       } from '../subworkflows/local/counts_commonref'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,6 +47,8 @@ workflow HLARNASEQ {
     ch_hlapm_star_align_rna_sample_alleles = channel.empty()
     ch_hlapm_edit_distance = channel.empty()
     ch_hlapm_gene_summary = channel.empty()
+    ch_counts_commonref_gene_counts = channel.empty()
+    ch_counts_commonref_summary = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -55,6 +58,19 @@ workflow HLARNASEQ {
         ch_arcashla_genotypes = ARCASHLA.out.genotypes
         ch_arcashla_genotype_logs = ARCASHLA.out.genotype_logs
         ch_arcashla_combined_genotype = ARCASHLA.out.combined_genotype
+
+        // Runs on the sample's original whole-genome BAM (--rna_samples'
+        // bam/bai columns), independent of --sample_key/HLApm - iteration 1
+        // of "hijack original count matrix" (see docs/output.md).
+        // SUBREAD_FEATURECOUNTS reports its own version via the topic-based
+        // versions channel (like STAR_ALIGN/STAR_GENOMEGENERATE/SAMTOOLS_SORT
+        // elsewhere in this pipeline), collected automatically below -
+        // COUNTS_COMMONREF has no other module and so emits no versions
+        // channel of its own to mix in here.
+        ch_gtf = Channel.value(file(params.gtf))
+        COUNTS_COMMONREF(ch_rna_samplesheet, ch_gtf)
+        ch_counts_commonref_gene_counts = COUNTS_COMMONREF.out.gene_counts
+        ch_counts_commonref_summary = COUNTS_COMMONREF.out.summary
     }
 
     if (params.wgs_samples) {
@@ -161,6 +177,8 @@ workflow HLARNASEQ {
     hlapm_star_align_rna_sample_alleles = ch_hlapm_star_align_rna_sample_alleles // channel: [ path("rna_sample_alleles.csv") ]
     hlapm_edit_distance = ch_hlapm_edit_distance // channel: [ val(meta), path("*.edit_distance.tsv") ], meta.id == rna_id
     hlapm_gene_summary = ch_hlapm_gene_summary // channel: [ val(meta), path("*.HLA_gene_summary.tsv") ], meta.id == rna_id
+    counts_commonref_gene_counts = ch_counts_commonref_gene_counts // channel: [ val(meta), path("*featureCounts.tsv") ], meta.id == rna_id
+    counts_commonref_summary = ch_counts_commonref_summary // channel: [ val(meta), path("*featureCounts.tsv.summary") ], meta.id == rna_id
 
 }
 
