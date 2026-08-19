@@ -1,0 +1,7 @@
+read_name	gene_name_confidence	gene_name	SAMPLE1.allele1.bam
+read1	unique	HLA-A	2
+read2	unique	HLA-A	1
+read3	best	HLA-B	3
+read4	unique	HLA-B	8
+read5	unique	HLA-DRB1	9
+read_ambig	ambiguous	HLA-C	1

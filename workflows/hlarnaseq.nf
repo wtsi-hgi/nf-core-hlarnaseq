@@ -15,6 +15,7 @@ include { HLAPM_STAR_ALIGN       } from '../subworkflows/local/hlapm_star_align'
 include { HLAPM_STAR_QUANTIFY    } from '../subworkflows/local/hlapm_star_quantify'
 include { COUNTS_COMMONREF       } from '../subworkflows/local/counts_commonref'
 include { COUNTS_COMMONREF_HLA   } from '../subworkflows/local/counts_commonref_hla'
+include { HLA_READCOUNT_RECONCILE } from '../subworkflows/local/hla_readcount_reconcile'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -51,6 +52,8 @@ workflow HLARNASEQ {
     ch_counts_commonref_gene_counts = channel.empty()
     ch_counts_commonref_summary = channel.empty()
     ch_counts_commonref_hla_read_gene_assignments = channel.empty()
+    ch_hla_readcount_diff = channel.empty()
+    ch_hla_readcount_diff_warnings = channel.empty()
 
     if (params.rna_samples) {
         ARCASHLA(ch_rna_samplesheet)
@@ -141,6 +144,22 @@ workflow HLARNASEQ {
         ch_versions = ch_versions.mix(HLAPM_STAR_QUANTIFY.out.versions)
         ch_hlapm_edit_distance = HLAPM_STAR_QUANTIFY.out.edit_distance
         ch_hlapm_gene_summary = HLAPM_STAR_QUANTIFY.out.gene_summary
+
+        // Iteration 3 of "hijack original count matrix" (see docs/output.md):
+        // reconciles iteration 2's local, HLA-region-restricted featureCounts
+        // read-gene-assignment table (ch_counts_commonref_hla_read_gene_assignments,
+        // from the earlier, unconditional `if (params.rna_samples)` block)
+        // against this sample's own personalized-HLA per-read quantification
+        // (ch_hlapm_edit_distance, just produced above), emitting a per-sample
+        // diff table. Both required inputs are available by this point in the
+        // workflow. Only RNA samples resolved through --sample_key/HLApm to
+        // at least one personalized allele - i.e. present in
+        // ch_hlapm_edit_distance - get a diff table (inner join on rna_id,
+        // performed inside HLA_READCOUNT_RECONCILE itself).
+        HLA_READCOUNT_RECONCILE(ch_counts_commonref_hla_read_gene_assignments, ch_hlapm_edit_distance, ch_gtf)
+        ch_versions = ch_versions.mix(HLA_READCOUNT_RECONCILE.out.versions)
+        ch_hla_readcount_diff = HLA_READCOUNT_RECONCILE.out.read_count_diff
+        ch_hla_readcount_diff_warnings = HLA_READCOUNT_RECONCILE.out.gene_id_resolution_warnings
     }
 
     //
@@ -195,6 +214,8 @@ workflow HLARNASEQ {
     counts_commonref_gene_counts = ch_counts_commonref_gene_counts // channel: [ val(meta), path("*featureCounts.tsv") ], meta.id == rna_id
     counts_commonref_summary = ch_counts_commonref_summary // channel: [ val(meta), path("*featureCounts.tsv.summary") ], meta.id == rna_id
     counts_commonref_hla_read_gene_assignments = ch_counts_commonref_hla_read_gene_assignments // channel: [ val(meta), path("*.rnaseq_featurecounts.tsv") ], meta.id == rna_id
+    hla_readcount_diff = ch_hla_readcount_diff // channel: [ val(meta), path("*.hla_readcount_reconcile.tsv") ], meta.id == rna_id, only for samples present in both counts_commonref_hla_read_gene_assignments and hlapm_edit_distance
+    hla_readcount_diff_warnings = ch_hla_readcount_diff_warnings // channel: [ val(meta), path("*.gene_id_resolution_warnings.tsv") ], meta.id == rna_id, only for samples present in both counts_commonref_hla_read_gene_assignments and hlapm_edit_distance
 
 }
 

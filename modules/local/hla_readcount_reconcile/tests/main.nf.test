@@ -1,0 +1,183 @@
+nextflow_process {
+
+    name "Test Process HLA_READCOUNT_RECONCILE_DIFF"
+    script "../main.nf"
+    process "HLA_READCOUNT_RECONCILE_DIFF"
+    tag "modules"
+    tag "modules_local"
+    tag "hla_readcount_reconcile"
+
+    test("reconciles missing_fc/both_hla/reassigned_to_hla/dropped_due_to_better_non_hla read pairs into a per-gene diff table") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/hla_readcount_reconcile"
+
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true),
+                        file("\${fixtures}/sample.edit_distance.tsv", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(file("\${fixtures}/clean.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.read_count_diff[0][1]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split('\t', -1) }
+
+            // Every post-filter personalized-HLA gene appears, including
+            // HLA-DRB1 whose only read pair was dropped_due_to_better_non_hla
+            // - it must still appear with a reconciled count of exactly 0,
+            // not silently disappear (the fix over the prototype script).
+            assert rows.size() == 4
+
+            // HLA-A: kept via missing_fc (read1) + both_hla (read2) = 2,
+            // against a local featureCounts baseline of 1 (read2 only).
+            assert rows.count { it[0] == 'ENSG_HLA_A' && it[1] == 'HLA-A' && it[2] == 'hla' && it[3] == '1' && it[4] == '2' && it[5] == '1' } == 1
+
+            // HLA-B: kept via reassigned_to_hla (read3) = 1, against a local
+            // featureCounts baseline of 0 (no HLA-B rows in the fc table).
+            assert rows.count { it[0] == 'ENSG_HLA_B' && it[1] == 'HLA-B' && it[2] == 'hla' && it[3] == '0' && it[4] == '1' && it[5] == '1' } == 1
+
+            // HLA-DRB1: its only read (read5) was dropped_due_to_better_non_hla
+            // - reconciled count of exactly 0, not an absent row.
+            assert rows.count { it[0] == 'ENSG_HLA_DRB1' && it[1] == 'HLA-DRB1' && it[2] == 'hla' && it[3] == '0' && it[4] == '0' && it[5] == '0' } == 1
+
+            // GENE_X: lost one read pair (read3) to HLA-B - appears as a
+            // non_hla row with NA personalized_count and a negative diff.
+            assert rows.count { it[0] == 'ENSG_GENE_X' && it[1] == 'GENE_X' && it[2] == 'non_hla' && it[3] == '3' && it[4] == 'NA' && it[5] == '-1' } == 1
+
+            // GENE_Y: untouched (no reads reassigned away from it) - must
+            // NOT appear at all, even though it has its own local
+            // featureCounts pairs.
+            assert rows.every { it[1] != 'GENE_Y' }
+
+            assert file(process.out.versions[0]).exists()
+
+            // Always emitted, even on a clean run with nothing to report -
+            // header-only (exactly one line: the header row).
+            def warnings_lines = file(process.out.gene_id_resolution_warnings[0][1]).text.readLines()
+            assert warnings_lines.size() == 1
+            assert warnings_lines[0] == 'gene_name\tcategory\treason\tgene_ids\tresolution\tresolved_gene_id'
+        }
+    }
+
+    test("resolves ambiguous gene names deterministically instead of hard-failing, and records them in the warnings file") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/hla_readcount_reconcile"
+
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true),
+                        file("\${fixtures}/sample.edit_distance.tsv", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(file("\${fixtures}/ambiguous.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.read_count_diff[0][1]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split('\t', -1) }
+
+            // HLA-A is ambiguous in ambiguous.gtf (ENSG_HLA_A then
+            // ENSG_HLA_A_DUP, in that file order) - the HLA category
+            // resolves to the first-appearing id, not a hard failure.
+            assert rows.count { it[1] == 'HLA-A' && it[0] == 'ENSG_HLA_A' } == 1
+
+            // GENE_X is ambiguous in ambiguous.gtf (ENSG_GENE_X then
+            // ENSG_GENE_X_DUP, in that file order) - the non_hla category
+            // resolves to the semicolon-joined full, ordered id list.
+            assert rows.count { it[1] == 'GENE_X' && it[0] == 'ENSG_GENE_X;ENSG_GENE_X_DUP' } == 1
+
+            def warning_rows = file(process.out.gene_id_resolution_warnings[0][1]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split('\t', -1) }
+
+            assert warning_rows.count {
+                it[0] == 'HLA-A' && it[1] == 'hla' && it[2] == 'ambiguous_gene_id' &&
+                it[3] == 'ENSG_HLA_A;ENSG_HLA_A_DUP' && it[4] == 'first_id_used' && it[5] == 'ENSG_HLA_A'
+            } == 1
+
+            assert warning_rows.count {
+                it[0] == 'GENE_X' && it[1] == 'non_hla' && it[2] == 'ambiguous_gene_id' &&
+                it[3] == 'ENSG_GENE_X;ENSG_GENE_X_DUP' && it[4] == 'all_ids_joined' && it[5] == 'ENSG_GENE_X;ENSG_GENE_X_DUP'
+            } == 1
+        }
+    }
+
+    test("soft-fails to gene_id NA when a gene name is absent from --gtf") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/hla_readcount_reconcile"
+
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true),
+                        file("\${fixtures}/sample.edit_distance.tsv", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(file("\${fixtures}/missing_gene.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rows = file(process.out.read_count_diff[0][1]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split('\t', -1) }
+
+            // HLA-DRB1 is absent from missing_gene.gtf - its row's gene_id
+            // must be the literal string "NA" (soft-fail, run still
+            // succeeds), not a hard process failure.
+            assert rows.count { it[1] == 'HLA-DRB1' && it[0] == 'NA' } == 1
+
+            // The same missing-gene-name case is also recorded as a row in
+            // the unified gene_id_resolution_warnings file, not just the
+            // batched stderr message.
+            def warning_rows = file(process.out.gene_id_resolution_warnings[0][1]).text
+                .readLines()
+                .drop(1)
+                .collect { it.split('\t', -1) }
+
+            assert warning_rows.count {
+                it[0] == 'HLA-DRB1' && it[1] == 'hla' && it[2] == 'missing_gene_name' &&
+                it[3] == '' && it[4] == 'na_placeholder' && it[5] == 'NA'
+            } == 1
+        }
+    }
+}

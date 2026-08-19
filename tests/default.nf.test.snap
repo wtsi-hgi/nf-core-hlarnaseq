@@ -51,6 +51,10 @@
                     "python3": "3.14.6",
                     "pandas": "3.0.3"
                 },
+                "HLA_READCOUNT_RECONCILE_DIFF": {
+                    "python3": "unknown",
+                    "pandas": "unknown"
+                },
                 "SAMTOOLS_SORT": {
                     "samtools": 1.24
                 },
@@ -97,6 +101,10 @@
                 "hla_consensus",
                 "hla_consensus/hla_consensus.rna_wgs_hla_consensus.tsv",
                 "hla_consensus/hla_consensus.rna_wgs_rna-hla_with_consensus.tsv",
+                "hla_readcount_reconcile",
+                "hla_readcount_reconcile/RNA_SAMPLE_1",
+                "hla_readcount_reconcile/RNA_SAMPLE_1/RNA_SAMPLE_1.gene_id_resolution_warnings.tsv",
+                "hla_readcount_reconcile/RNA_SAMPLE_1/RNA_SAMPLE_1.hla_readcount_reconcile.tsv",
                 "hlapm",
                 "hlapm/input",
                 "hlapm/input/RNA_ONLY:RNA_SAMPLE_1.tsv",
@@ -166,6 +174,8 @@
                 "RNA_SAMPLE_1.rnaseq_featurecounts.tsv:md5,275cf3833b1f6e49a6bef8d98fa3f7df",
                 "hla_consensus.rna_wgs_hla_consensus.tsv:md5,f67bf27de8a0ee41ba0fa1fdbc96d484",
                 "hla_consensus.rna_wgs_rna-hla_with_consensus.tsv:md5,c089d676b1273b0f9d90aa830cd97d36",
+                "RNA_SAMPLE_1.gene_id_resolution_warnings.tsv:md5,8867f9ac54028496d3d7b1660abe59ce",
+                "RNA_SAMPLE_1.hla_readcount_reconcile.tsv:md5,5367c3ca715d0d222db7edd921dabe3b",
                 "RNA_ONLY:RNA_SAMPLE_1.tsv:md5,a6b78fa301a1d94fa37f2d34a16a0ff2",
                 "placeholder_allele.fa:md5,49ba555556ea9b079047b65cfbd0a949",
                 "placeholder_allele.gtf:md5,4101a318bb0fbb342200389962b70b0c",

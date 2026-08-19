@@ -89,7 +89,7 @@
                     "type": "integer",
                     "default": 16,
                     "description": "Maximum summed-mate edit distance (NM) for a read to count toward a gene's HLA read count.",
-                    "help_text": "Passed through to the HLAPM_SUMMARIZE_READCOUNTS step. Matches the source script's hardcoded best_map_dist_threshold, based on \"4 reads/100bp, as mapped in the original HGI pipeline\".",
+                    "help_text": "Passed through to the HLAPM_SUMMARIZE_READCOUNTS step and, as the same edit-distance threshold, to the HLA_READCOUNT_RECONCILE_DIFF step (HLA read-count reconciliation diff table). Matches the source script's hardcoded best_map_dist_threshold, based on \"4 reads/100bp, as mapped in the original HGI pipeline\".",
                     "fa_icon": "fas fa-ruler"
                 },
                 "rnaseq_strandedness": {

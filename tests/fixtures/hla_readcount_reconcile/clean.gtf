@@ -1,0 +1,12 @@
+#!genome-build placeholder
+#!genome-version placeholder
+chr6	placeholder	gene	1	100	.	+	.	gene_id "ENSG_HLA_A"; gene_name "HLA-A";
+chr6	placeholder	exon	1	100	.	+	.	gene_id "ENSG_HLA_A"; gene_name "HLA-A";
+chr6	placeholder	gene	200	300	.	+	.	gene_id "ENSG_HLA_B"; gene_name "HLA-B";
+chr6	placeholder	exon	200	300	.	+	.	gene_id "ENSG_HLA_B"; gene_name "HLA-B";
+chr6	placeholder	gene	400	500	.	+	.	gene_id "ENSG_HLA_DRB1"; gene_name "HLA-DRB1";
+chr6	placeholder	exon	400	500	.	+	.	gene_id "ENSG_HLA_DRB1"; gene_name "HLA-DRB1";
+chr1	placeholder	gene	1	100	.	+	.	gene_id "ENSG_GENE_X"; gene_name "GENE_X";
+chr1	placeholder	exon	1	100	.	+	.	gene_id "ENSG_GENE_X"; gene_name "GENE_X";
+chr1	placeholder	gene	200	300	.	+	.	gene_id "ENSG_GENE_Y"; gene_name "GENE_Y";
+chr1	placeholder	exon	200	300	.	+	.	gene_id "ENSG_GENE_Y"; gene_name "GENE_Y";

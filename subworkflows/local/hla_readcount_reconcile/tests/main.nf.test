@@ -1,0 +1,81 @@
+nextflow_workflow {
+
+    name "Test Subworkflow HLA_READCOUNT_RECONCILE"
+    script "../main.nf"
+    workflow "HLA_READCOUNT_RECONCILE"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "hla_readcount_reconcile"
+
+    test("joins read_gene_assignments and edit_distance on rna_id, emitting a diff table only for samples present in both (inner join)") {
+
+        options '-stub'
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            workflow {
+                """
+                def fixtures = "${projectDir}/tests/fixtures/hla_readcount_reconcile"
+
+                // RNA_SAMPLE_1 and RNA_SAMPLE_2 are present in both input
+                // channels; RNA_SAMPLE_3 has a counts_commonref_hla table
+                // but no personalized-HLA edit_distance.tsv (not resolved
+                // through --sample_key/HLApm to any allele) and must be
+                // silently dropped, not errored.
+                input[0] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1', single_end: false, strandedness: 'reverse' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'RNA_SAMPLE_2', single_end: false, strandedness: 'reverse' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'RNA_SAMPLE_3', single_end: false, strandedness: 'reverse' ],
+                        file("\${fixtures}/sample.rnaseq_featurecounts.tsv", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(
+                    [
+                        [ id: 'RNA_SAMPLE_1' ],
+                        file("\${fixtures}/sample.edit_distance.tsv", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'RNA_SAMPLE_2' ],
+                        file("\${fixtures}/sample.edit_distance.tsv", checkIfExists: true)
+                    ]
+                )
+                input[2] = Channel.value(file("${projectDir}/tests/fixtures/placeholder.gtf", checkIfExists: true))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+
+            assert workflow.out.read_count_diff.size() == 2
+
+            def ids = workflow.out.read_count_diff.collect { meta, tsv -> meta.id }.sort()
+            assert ids == ['RNA_SAMPLE_1', 'RNA_SAMPLE_2']
+
+            // The reconstructed meta is a clean [id: rna_id] - the fc side's
+            // extra single_end/strandedness keys are discarded, not
+            // meaningful to this step.
+            assert workflow.out.read_count_diff.every { meta, tsv -> meta.keySet() == ['id'] as Set }
+
+            assert workflow.out.read_count_diff.every { meta, tsv -> file(tsv).exists() }
+
+            // The new gene_id_resolution_warnings emit is produced for the
+            // same, inner-joined set of samples as read_count_diff.
+            assert workflow.out.gene_id_resolution_warnings.size() == 2
+
+            def warning_ids = workflow.out.gene_id_resolution_warnings.collect { meta, tsv -> meta.id }.sort()
+            assert warning_ids == ['RNA_SAMPLE_1', 'RNA_SAMPLE_2']
+
+            assert workflow.out.gene_id_resolution_warnings.every { meta, tsv -> file(tsv).exists() }
+        }
+    }
+}

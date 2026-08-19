@@ -73,6 +73,17 @@ nextflow_pipeline {
                 // need to parse that stubbed placeholder's content).
                 { assert new File("$outputDir/counts_commonref_hla/RNA_SAMPLE_1/RNA_SAMPLE_1.rnaseq_featurecounts.tsv").exists() },
                 { assert new File("$outputDir/counts_commonref_hla/RNA_SAMPLE_1/RNA_SAMPLE_1.rnaseq_featurecounts.tsv").text.contains('read_name\tdirection\tgene_name\tedit_distance') },
+                // HLA_READCOUNT_RECONCILE: iteration 3 of "hijack original
+                // count matrix" - reconciles counts_commonref_hla's per-read
+                // gene-assignment table (above) against HLAPM_STAR_QUANTIFY's
+                // own per-read edit_distance.tsv (above), producing a
+                // per-gene diff table. Only produced here because
+                // RNA_SAMPLE_1 is resolved through --sample_key/HLApm to a
+                // personalized allele (exercised in stub form via
+                // HLA_READCOUNT_RECONCILE_DIFF's own stub: block, since its
+                // real script would otherwise need to parse
+                // HLAPM_QUANTIFY_READS' non-HLA-prefixed stub content).
+                { assert new File("$outputDir/hla_readcount_reconcile/RNA_SAMPLE_1/RNA_SAMPLE_1.hla_readcount_reconcile.tsv").text.contains('gene_id\tgene_name\tcategory\toriginal_fc_count\tpersonalized_count\tdiff') },
                 { assert snapshot(
                     // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
                     removeNextflowVersion("$outputDir/pipeline_info/nf_core_hlarnaseq_software_versions.yml"),
