@@ -12,14 +12,17 @@ by using personalized reference genomes.
 ## Technology Stack (fixed)
 - Nextflow for workflow execution
 - Python and R for data analysis
-- Early-stage development assumption: all external utilities are available in
-  the currently active Conda environment
+- Runtime tool dependencies are provided either by the currently active Conda environment 
+  or by Docker/Singularity/Apptainer containers, 
+  following   the nf-core module convention of pairing each module's `conda`/
+  `environment.yml` declaration with a matching `container` directive.
 - Follow NF-Core template and guidelines
 - Use existing NF-Core modules when possible
 
 Do not introduce alternative frameworks and technologies.
-For this development stage, do not create containers, add container packaging, or run containerized
-execution profiles.
+Docker and Singularity/Apptainer container creation and execution are permitted; 
+prefer the standard nf-core pattern of deriving both the `conda` and `container` directives 
+from one module `environment.yml`.
 
 ## Development Model
 
@@ -57,19 +60,21 @@ For AI-configuration maintenance:
 - Preserve nf-core template structure and naming conventions.
 - Prefer nf-core/modules and nf-core/subworkflows over local custom code when a suitable maintained component exists.
 - Keep workflow logic in Nextflow DSL2.
-- Keep custom analysis scripts in Python or R under `bin/`.
-- For this development srate, place all custom Python and R scripts in `bin/`
-  instead of packaging them into containers.
+- Keep custom analysis scripts in Python or R under `bin/`, regardless of
+  whether a module runs via Conda or a container — `bin/` scripts are staged
+  onto `PATH` in both cases.
 - Assume that everything required to run the pipeline and custom scripts from
-  `bin/` is available in the currently active Conda environment, normally the
-  `nf-core` profile;
-  if shell activation is unavailable, preserve the environment explicitly, for example:
-  `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; python bin/<script>.py'`.
-- Do not create, build, pull, or run containers for this pipeline at the
-  current development stage.
-- Every runtime tool dependency should be expected from the active Conda
-  environment; document dependency assumptions, but do not add container
-  packaging in this stage.
+  `bin/` is available either in the currently active Conda environment,
+  normally the `nf-core` profile, or in the module's container when running
+  a containerized profile;
+- Docker, Singularity, and Apptainer container creation, building, pulling,
+  and running are permitted. Prefer the standard nf-core module pattern:
+  declare dependencies once in a module `environment.yml`, feed it to the
+  `conda` directive, and pair it with a matching `container` directive
+  (a pinned Biocontainers/Wave image, or a module-local `Dockerfile` when
+  the tool is not on Bioconda).
+- Every runtime tool dependency should be documented, whether it is expected
+  from the active Conda environment, a container image, or both.
 - If some tool or library is missing, stop and ask the developer to install it.
 - Keep test data small and suitable for nf-core test profiles.
 - Update `nextflow_schema.json`, docs, tests, and pipeline metadata together when parameters, inputs, or outputs change.
@@ -103,12 +108,16 @@ environment is active:
 - if the tools are still unavailable, stop and ask the user to activate or fix
   the nf-core environment.
 
-Container validation is disabled for the current early-stage development policy:
+Container validation is enabled:
 
-- do not run `docker info`;
-- do not create or run containers;
-- record in `artifacts/3_validate.md` that containerized validation is
-  intentionally out of scope for the current early-stage development policy.
+- run `docker info` (and `singularity --version` / `apptainer --version` when
+  targeting Singularity/Apptainer) to confirm the container runtime is
+  available before relying on containerized profiles;
+- containerized `nextflow run` profiles (`docker`, `singularity`, `apptainer`)
+  may be created and run as part of validation;
+- if a container runtime or a specific image is genuinely unavailable
+  (missing daemon, no network/registry access), record that explicitly in
+  `artifacts/3_validate.md` as a blocked check with residual risk.
 
 When the validation script needs network access or access to tool caches outside
 the sandbox, agents must run it with escalated privileges.
@@ -131,12 +140,13 @@ Preferred checks, when available:
 - `nf-test test`
 - `nextflow run . -profile test --outdir <OUTDIR>`
 - `nextflow run . -profile debug,test --outdir <OUTDIR>`
+- `nextflow run . -profile docker,test --outdir <OUTDIR>`
+- `nextflow run . -profile singularity,test --outdir <OUTDIR>`
 - `pre-commit run --all-files`
 
 If a check is unavailable or blocked by missing tools, network, or test data,
 record that explicitly in `artifacts/3_validate.md` with the command attempted
-and the residual risk. 
-Record skipped container checks as intentional policy skips, not environmental failures.
+and the residual risk.
 
 Validation scripts should write logs and Nextflow output directories under a
 unique `artifacts/validation/<timestamp>/` directory so repeated validation
@@ -157,7 +167,7 @@ runs do not overwrite earlier evidence.
 
 - The plan → approve → implement → validate cycle may be skipped only when the human explicitly instructs a direct change in the same request, using clear language such as "make this change directly", "skip the plan", "just implement it, no plan needed", or "don't stop for approval". A generic sense of urgency or a short task description is not sufficient — the instruction to bypass must be explicit and about process, not just about scope.
 - When bypassing is explicitly requested:
-  - still keep the change small and reviewable, and still avoid introducing containers, unrelated refactors, or new frameworks;
+  - still keep the change small and reviewable, and still avoid unrelated refactors or new frameworks;
   - still run validation appropriate to the change and report results (validation itself is not optional, only the pre-implementation plan/approval stop is skipped);
   - still do not commit to Git unless separately asked;
   - state in the response that the plan/approval step was skipped because the human asked for a direct change, so the bypass is visible and auditable.

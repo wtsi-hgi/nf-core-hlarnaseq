@@ -40,12 +40,18 @@ Skip this skill only when the user explicitly asks to bypass the plan/approval s
 10. Include validation commands with pass criteria and note likely blockers.
 11. Stop and request human approval. Do not implement.
 
-## Early-Stage Conda Policy
+## Dependency and Container Policy
 
-- Treat runtime tools as provided by the currently active Conda environment.
+- Treat runtime tools as provided by the currently active Conda environment,
+  or by a Docker/Singularity/Apptainer container built from the module's
+  `environment.yml` — both are permitted.
 - Plan custom Python and R scripts under `bin/`.
-- Do not plan container creation, packaging, pulls, or containerized execution profiles.
-- When adding a tool, document the Conda environment expectation, versions reporting, and citation impact instead of adding container packaging.
+- Container creation, packaging, pulls, and containerized execution profiles
+  may be planned. Prefer the standard nf-core pattern: one module
+  `environment.yml` feeding both the `conda` directive and a matching
+  `container` directive.
+- When adding a tool, document the Conda environment expectation (and/or
+  container image), versions reporting, and citation impact.
 
 ## Output
 

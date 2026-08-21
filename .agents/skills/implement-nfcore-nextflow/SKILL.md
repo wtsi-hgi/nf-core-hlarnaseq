@@ -44,6 +44,9 @@ Use this skill only after a human has explicitly approved `artifacts/1_plan.md`.
 - Do not commit changes.
 - Do not modify generated snapshots blindly; only update snapshots when behavior is understood.
 - Do not introduce new frameworks.
-- Do not create, build, pull, or run containers during the current early-stage development policy.
+- Container creation, building, pulling, and running (Docker, Singularity,
+  Apptainer) are permitted; prefer pairing each module's `conda`
+  `environment.yml` with a matching `container` directive per nf-core
+  convention rather than ad hoc container setup.
 - Do not replace nf-core scaffold patterns with custom conventions.
 - If implementation reveals that the approved plan is materially wrong, stop and ask for a revised plan.

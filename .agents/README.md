@@ -12,10 +12,10 @@ The workflow is intentionally human-in-the-loop:
 
 Agents must not commit changes unless explicitly asked.
 
-During the current early-stage development policy, 
-assume runtime tools are available in the active Conda environment, 
-place custom Python and R scripts under `bin/`, 
-and do not create, build, pull, or run containers.
+Runtime tools may be provided by the active Conda environment or by
+Docker/Singularity/Apptainer containers built from a module's
+`environment.yml` (both are permitted); custom Python and R scripts live
+under `bin/` either way.
 
 ## Roles
 

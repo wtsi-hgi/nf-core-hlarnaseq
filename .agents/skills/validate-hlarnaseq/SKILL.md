@@ -13,8 +13,7 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 2. Read `artifacts/1_plan.md` and `artifacts/2_implement.md` when present.
 3. Create `artifacts/` if it does not exist.
 4. Run `.agents/skills/validate-hlarnaseq/scripts/validate.sh` unless the user requests narrower validation.
-   - The Nextflow testdata smoke check must run on the remote VM via `./run_tests_remote`.
-   - Do not replace it with local `nextflow run . -profile test` unless the user explicitly asks for local-only validation or remote access is blocked.
+   - Run the Nextflow testdata smoke check locally via `./pipeline_testdata_run.sh` (defaults to `-profile singularity`; override with `PROFILE=<profile>` or pass `-profile <profile>` through as an argument).
 5. Review changed files against the approved plan.
 6. Check for nf-core pipeline risks:
    - invalid channel contracts;
@@ -46,10 +45,10 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 - Medium: user-facing docs/schema drift, incomplete validation of changed workflow behavior, missing citations or versions for new tools.
 - Low: maintainability issues, narrow docs gaps, minor style issues that do not affect execution.
 
-## Early-Stage Conda Policy
+## Conda and Container Policy
 
 - Before validation, verify `nf-core`, `nf-test`, and `nextflow` are available from the active environment.
 - If they are unavailable, try preserving the expected environment path with `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; ...'`.
-- Do not run `docker info` or any containerized profile.
-- Record skipped container checks as intentional policy skips, not environmental failures.
-- For pipeline smoke validation, use `./run_tests_remote`; it activates the remote `nf-core` Conda environment by default and runs `pipeline_testdata_run.sh` on the VM.
+- Run `docker info` (and `singularity --version` / `apptainer --version` when relevant) and containerized `nextflow run` profiles — they are permitted and preferred when the runtime is available.
+- If a container runtime or image is genuinely unavailable, record that as a blocked check with residual risk, not a policy skip.
+- For pipeline smoke validation, run `./pipeline_testdata_run.sh` locally; it defaults to `-profile singularity` and clones `HLApm` into the run directory on first use.
