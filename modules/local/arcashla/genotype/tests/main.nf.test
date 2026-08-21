@@ -1,0 +1,57 @@
+nextflow_process {
+
+    name "Test Process ARCASHLA_GENOTYPE"
+    script "../main.nf"
+    process "ARCASHLA_GENOTYPE"
+    tag "modules"
+    tag "modules_local"
+    tag "arcashla_genotype"
+
+    test("runs arcasHLA genotype with no external Conda environment (regression guard for the arcas-hla environment/container packaging)") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                arcashla_genes = 'A,B,C'
+                // Points at a pre-built reference (see
+                // scripts/build_arcashla_reference.sh); this test does not
+                // build one itself. Set TEST_ARCASHLA_REFERENCE_DIR when
+                // running this test - e.g. to an existing installation's
+                // share/arcas-hla-*/dat/ref, or to the output of
+                // scripts/build_arcashla_reference.sh.
+                arcashla_reference_dir = System.getenv('TEST_ARCASHLA_REFERENCE_DIR')
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        [id: 'test'],
+                        [
+                            file("${projectDir}/tests/fixtures/arcashla/genotype/HLA_SIGNAL_R1.fastq.gz", checkIfExists: true),
+                            file("${projectDir}/tests/fixtures/arcashla/genotype/HLA_SIGNAL_R2.fastq.gz", checkIfExists: true)
+                        ]
+                    )
+                )
+                """
+            }
+        }
+
+        then {
+            // This module-level test proves the process runs its real
+            // arcasHLA alignment/genotyping path end to end with no
+            // `conda run -n arcas-hla`/external environment involved, and
+            // reports a real tool version. The fixture (see
+            // tests/fixtures/arcashla/genotype/README.md) is a small real
+            // HLA-region read subset - enough to exercise genotyping, but
+            // not enough to guarantee stable, version-independent allele
+            // calls, so specific genotype content is not asserted here.
+            assert process.success
+            assert file(process.out.genotype[0][1]).exists()
+            assert file(process.out.log[0][1]).exists()
+
+            def versions = file(process.out.versions[0]).text
+            assert versions.contains('arcasHLA:')
+            assert !versions.contains('arcasHLA: "unknown"')
+        }
+    }
+}

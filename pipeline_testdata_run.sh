@@ -33,6 +33,7 @@ NEXTFLOW_LOG="${NEXTFLOW_LOG:-${RUN_DIR}/testdata.log}"
 RNA_SAMPLESHEET="${RNA_SAMPLESHEET:-${ROOT_DIR}/assets/rna_samples.csv}"
 WGS_SAMPLESHEET="${WGS_SAMPLESHEET:-${ROOT_DIR}/assets/wgs_samples.csv}"
 RNA_WGS_KEY="${RNA_WGS_KEY:-${ROOT_DIR}/assets/rna_wgs_key.csv}"
+ARCASHLA_REF="${ROOT_DIR}/testdata-make/hlarnases-testdata/arcashla-ref"
 HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 PROFILE="${PROFILE:-}"
 HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
@@ -58,6 +59,7 @@ nextflow -log "${NEXTFLOW_LOG}" \
     -work-dir "${NEXTFLOW_WORKDIR}" \
     -profile singularity \
     -resume \
+    --arcashla_reference_dir "$ARCASHLA_REF" \
     --rna_samples "${RNA_SAMPLESHEET}" \
     --hla_region "${HLA_REGION}" \
     --wgs_samples "${WGS_SAMPLESHEET}" \

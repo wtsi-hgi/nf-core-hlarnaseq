@@ -50,7 +50,7 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 
 </details>
 
-`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment rather than the pipeline's main environment (see [usage docs](usage.md) for details); this pipeline never builds or updates the arcasHLA reference itself.
+`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. This step provisions arcasHLA itself via its own `environment.yml`/`conda` and `container` directives (see [usage docs](usage.md#arcashla-genotyping-environment) for details) rather than a shared, operator-prepared Conda environment; its reference (IMGT/HLA + kallisto index) is a required, separately-prepared input (`--arcashla_reference_dir`, built with `scripts/build_arcashla_reference.sh`), the same pattern as `--hlala_graph_dir` for HLA-LA below.
 
 ### HLA-LA
 

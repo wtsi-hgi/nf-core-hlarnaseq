@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: ARCASHLA_GENOTYPE tool environment.
+#
+# kallisto is pinned: later kallisto releases break this arcasHLA version's
+# `kallisto pseudo` output parsing. This is also the environment installed
+# into the module's container image (see Dockerfile) - one file backs both
+# the `conda` and `container` directives in main.nf.
+#
+# git/git-lfs are required by scripts/build_arcashla_reference.sh, which
+# clones https://github.com/ANHIG/IMGTHLA.git and checks out a pinned
+# historical commit itself (see that script for why) - not needed by
+# `genotype`, but this same environment/image is also what that script
+# uses, and minimal container base images don't ship either by default.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioconda::arcas-hla=0.6.0
+  - bioconda::kallisto=0.44.0
+  - conda-forge::git
+  - conda-forge::git-lfs

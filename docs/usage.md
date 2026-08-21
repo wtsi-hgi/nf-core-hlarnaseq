@@ -44,13 +44,30 @@ Once a sample's extracted reads pass validation, the pipeline runs `arcasHLA gen
 
 ### arcasHLA genotyping environment
 
-`arcasHLA genotype` is invoked inside a dedicated Conda environment named `arcas-hla`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**: the pipeline does not create it, install packages into it, or build/update its reference at any point. Before running the pipeline with RNA samples, prepare this environment yourself with:
+`ARCASHLA_GENOTYPE` provisions arcasHLA itself via its own module `environment.yml`/`conda` directive (`arcas-hla=0.6.0`, `kallisto=0.44.0` - later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing), resolved automatically by Nextflow under `-profile conda`. No separate operator-prepared Conda environment is needed for this step.
 
-- `arcas-hla=0.6.0`
-- `kallisto=0.44` (later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing)
-- a reference built via `arcasHLA reference` (IMGT/HLA database + kallisto index)
+arcasHLA has no option to point `genotype` at an external reference database at runtime; the reference used is always whichever one exists inside its own install. Rather than have the pipeline build this reference itself (it clones the ~4GB [ANHIG/IMGTHLA](https://github.com/ANHIG/IMGTHLA) database - too slow and network-dependent to do inside every container build or as a first-task surprise), it is prepared once, out of band, and pointed to with a required **`--arcashla_reference_dir`** parameter - the same pattern as `--hlala_graph_dir` for HLA-LA above. `ARCASHLA_GENOTYPE` symlinks this directory into place as its own `dat/ref` at the start of every task; the symlink swap is fast and atomic, so it's redone unconditionally on every task with no locking or "first use" logic.
 
-The pipeline does not support redirecting `arcasHLA genotype` to a different reference at runtime; the reference used is whichever one is built into the `arcas-hla` environment.
+Build the reference once with:
+
+```bash
+scripts/build_image_arcashla.sh              # build the container image, once
+scripts/build_arcashla_reference.sh /path/to/arcashla_reference   # build the reference into it, once
+```
+
+`build_arcashla_reference.sh` runs inside the same container image the pipeline itself uses (so the reference matches the exact pinned `arcas-hla=0.6.0`/`kallisto=0.44.0` versions). It does not just run plain `arcasHLA reference`: as of IMGT/HLA's Release 3.56.0, its large files (including the `hla.dat` this arcasHLA version expects as a plain file) are distributed as separate `.zip` downloads rather than checked into git, which arcasHLA 0.6.0 doesn't know how to handle. Instead, the script clones IMGT/HLA itself and checks out a pinned pre-3.56.0 commit (IMGT/HLA version 3.46.0 by default - the newest version arcasHLA 0.6.0 has a built-in commit mapping for; override with `IMGTHLA_COMMIT`), then runs `arcasHLA reference --rebuild` against that pinned checkout. This also pins the exact HLA database version used, rather than depending on whatever the upstream default branch contains when the script happens to be run. It checks that a real `hla.idx` file was actually produced before finishing (arcasHLA can otherwise fail partway without a clear error). Then run the pipeline with:
+
+```bash
+--arcashla_reference_dir /path/to/arcashla_reference
+```
+
+Under `-profile docker`/`-profile singularity`/`-profile apptainer`, `ARCASHLA_GENOTYPE` uses a container image built from `modules/local/arcashla/genotype/Dockerfile` (just the pinned packages - no reference baked in, for the same reason it isn't built automatically above). Build it once before running with a container profile:
+
+```bash
+scripts/build_image_arcashla.sh
+```
+
+This builds and tags the Docker image as `quay.io/hlarnaseq/arcashla-genotype:0.6.0`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed. It also converts that same image into a local `modules/local/arcashla/genotype/arcashla-genotype.sif` (when `singularity`/`apptainer` is available) for `-profile singularity`/`apptainer`: Singularity/Apptainer has no access to Docker's local image store, and a bare image name is not a filesystem path, so without this `.sif` file Nextflow would otherwise try (and fail) to pull the image from `quay.io` over the network. See `scripts/build_image_arcashla.sh --help` for details and override variables.
 
 ## WGS samplesheet input
 
@@ -138,7 +155,7 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 ### HLApm Conda environment
 
-Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/HLA-LA sections above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the HLA-LA section above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
 
 - R >= 4.1.0
 - CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
@@ -176,7 +193,7 @@ Per-allele-level read counts, a cross-sample combined gene-count table, and comp
 
 #### `hlapm-quantify` Conda environment
 
-Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/`hlapm` sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `hlapm`/HLA-LA sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
 
 - Python 2
 - `pybam` (`pip install https://github.com/JohnLonginotto/pybam/zipball/master`)
@@ -201,7 +218,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment, and a separate, dedicated `arcas-hla` Conda environment to be prepared as described above for arcasHLA genotyping.
+This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment; arcasHLA genotyping provisions its own tool environment/container automatically, as described above.
 
 > [!NOTE]
 > `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.

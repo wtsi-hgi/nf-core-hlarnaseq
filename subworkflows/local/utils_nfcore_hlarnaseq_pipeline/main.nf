@@ -218,6 +218,7 @@ def validateInputParameters() {
     genomeExistsError()
     hlalaGraphDirExistsError()
     hlapmRepoExistsError()
+    arcashlaReferenceDirExistsError()
 }
 
 //
@@ -373,6 +374,18 @@ def hlapmRepoExistsError() {
 
     if (params.rna_samples && params.sample_key && !file(params.hlapm_repo).exists()) {
         error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
+    }
+}
+//
+// Exit pipeline if RNA inputs are provided without a prepared arcasHLA reference directory
+//
+def arcashlaReferenceDirExistsError() {
+    if (params.rna_samples && !params.arcashla_reference_dir) {
+        error("Please provide --arcashla_reference_dir when using --rna_samples so ARCASHLA_GENOTYPE can find its prepared reference (build one with scripts/build_arcashla_reference.sh).")
+    }
+
+    if (params.rna_samples && !file(params.arcashla_reference_dir).exists()) {
+        error("Please check --arcashla_reference_dir -> Directory does not exist: ${params.arcashla_reference_dir}")
     }
 }
 //
