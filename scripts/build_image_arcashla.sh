@@ -49,7 +49,10 @@ command -v docker >/dev/null 2>&1 || {
 }
 
 echo "Building ${IMAGE_TAG} from ${MODULE_DIR} ..."
-docker build -t "${IMAGE_TAG}" "${MODULE_DIR}"
+# --no-cache: this image gets rebuilt repeatedly while iterating on
+# environment.yml/Dockerfile, and a stale cached layer silently surviving a
+# real change is a much more confusing failure mode than a slower rebuild.
+docker build --no-cache -t "${IMAGE_TAG}" "${MODULE_DIR}"
 echo "Built ${IMAGE_TAG}."
 
 SIF_BUILDER=""

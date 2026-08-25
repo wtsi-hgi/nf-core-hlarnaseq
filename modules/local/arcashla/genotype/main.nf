@@ -58,21 +58,42 @@ process ARCASHLA_GENOTYPE {
     # locking, whether the task got a fresh Conda environment or a fresh
     # container instance.
     #
-    # Guard against a real (non-empty, non-symlink) dat/ref already being
-    # there: a freshly installed arcas-hla package ships dat/ref empty (the
-    # bioconda build just copies the source repo's dat/ tree as-is), so this
-    # never trips for the fresh Conda environment / container image this
-    # module expects - but it stops this from silently deleting a real
-    # reference if it's ever accidentally run against an ambient environment
-    # that already has one built.
+    # Guard against a real (non-symlink) dat/ref that already has a real
+    # reference built into it: a freshly installed arcas-hla package's
+    # dat/ref is NOT empty - build.sh copies the source repo's dat/ tree
+    # as-is, which ships some baseline files (allele_groups.json, cDNA
+    # JSONs, tiny placeholder GRCh38.*.fasta stubs) - but never hla.idx (the
+    # kallisto index), hla.fasta, hla.convert.json, or the hla_partial.*
+    # equivalents, all of which only `arcasHLA reference` itself produces.
+    # hla.idx is therefore the correct signal for "a real reference already
+    # exists here" - checking for any content at all (an earlier version of
+    # this guard did) false-positives on every fresh install/container
+    # image, exactly the case this is supposed to allow through.
     ARCASHLA_REF_TARGET="\${ARCASHLA_HOME}/dat/ref"
     mkdir -p "\${ARCASHLA_HOME}/dat"
-    if [[ -d "\${ARCASHLA_REF_TARGET}" && ! -L "\${ARCASHLA_REF_TARGET}" && -n "\$(ls -A "\${ARCASHLA_REF_TARGET}" 2>/dev/null)" ]]; then
-        echo "ERROR: \${ARCASHLA_REF_TARGET} already exists as a non-empty real directory (not a symlink) - refusing to replace it with --arcashla_reference_dir to avoid destroying whatever is already there. ARCASHLA_GENOTYPE expects a fresh Conda environment (-profile conda) or its own container image, not an ambient environment with its own reference already built." >&2
+    if [[ -d "\${ARCASHLA_REF_TARGET}" && ! -L "\${ARCASHLA_REF_TARGET}" && -s "\${ARCASHLA_REF_TARGET}/hla.idx" ]]; then
+        echo "ERROR: \${ARCASHLA_REF_TARGET}/hla.idx already exists in a real directory (not a symlink) - refusing to replace it with --arcashla_reference_dir to avoid destroying whatever is already there. ARCASHLA_GENOTYPE expects a fresh Conda environment (-profile conda) or its own container image, not an ambient environment with its own reference already built." >&2
         exit 1
     fi
     rm -rf "\${ARCASHLA_REF_TARGET}"
     ln -s "${params.arcashla_reference_dir}" "\${ARCASHLA_REF_TARGET}"
+
+    # `arcasHLA genotype` independently imports and calls reference.py's own
+    # check_ref(), which - regardless of dat/ref already being correctly in
+    # place above - decides whether a reference exists solely by checking
+    # whether dat/IMGTHLA/hla.dat is present, and if not, tries to fetch and
+    # rebuild everything itself (re-cloning the ~4GB IMGT/HLA database, this
+    # time into a size-limited --writable-tmpfs overlay, hence "No space
+    # left on device"; and needing dat/IMGTHLA/wmda/hla_nom_p.txt, which was
+    # never fetched to begin with in this design). Its content is never
+    # actually read once check_ref() finds it present - only presence is
+    # checked - so a placeholder is sufficient and avoids needing to ship
+    # any of dat/IMGTHLA via --arcashla_reference_dir.
+    mkdir -p "\${ARCASHLA_HOME}/dat/IMGTHLA"
+    if [[ ! -e "\${ARCASHLA_HOME}/dat/IMGTHLA/hla.dat" ]]; then
+        echo "placeholder - dat/ref (symlinked above) is the real, already-built reference; this file exists only to satisfy arcasHLA's own check_ref() presence check, which never reads its content once found" \\
+            > "\${ARCASHLA_HOME}/dat/IMGTHLA/hla.dat"
+    fi
 
     arcasHLA genotype \\
         "${read1}" \\

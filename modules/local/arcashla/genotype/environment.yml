@@ -11,6 +11,13 @@
 # historical commit itself (see that script for why) - not needed by
 # `genotype`, but this same environment/image is also what that script
 # uses, and minimal container base images don't ship either by default.
+#
+# procps-ng provides `ps`: Nextflow's task wrapper runs it inside every
+# container to collect CPU/memory trace metrics, and fails the whole task
+# ("Command 'ps' required by nextflow to collect task metrics cannot be
+# found") if it's missing - the mambaorg/micromamba base image doesn't ship
+# it by default. Not needed for -profile conda (a regular Linux host always
+# has `ps`), only for the container image.
 channels:
   - conda-forge
   - bioconda
@@ -19,3 +26,4 @@ dependencies:
   - bioconda::kallisto=0.44.0
   - conda-forge::git
   - conda-forge::git-lfs
+  - conda-forge::procps-ng
