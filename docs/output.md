@@ -59,15 +59,21 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 
 - `hlala/`
   - `HLA-LA_combined.tsv`: Combined HLA-LA G-group allele calls across all WGS samples, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row, extracted from columns 1 and 3 of each sample's `R1_bestguess_G.txt`).
-  - `<sample_id>/R1_bestguess_G.txt`: Per-sample HLA-LA G-group best guess file.
-  - `<sample_id>/R1_bestguess.txt`: Per-sample HLA-LA best guess file, when produced by HLA-LA.
-  - `<sample_id>/hla.tar.gz`: Archive of the per-sample HLA-LA `hla/` result directory, when produced.
-  - `<sample_id>/hlala.log`: HLA-LA run log for the sample.
+  - `<sample_id>/`: HLA-LA's complete per-sample output directory, published in full (see the note on hard links below):
+    - `hla/`: the typing results, including `R1_bestguess_G.txt` (the G-group best guess file the combined TSV is built from), `R1_bestguess.txt`, and HLA-LA's full supporting output (`R1_pileup_*.txt`, `R1_PP_*_pairs.txt`, `R1_readIDs_*.txt`, `R1_columnIncompatibilities_*.txt`, `R1_parameters.txt`, `histogram_matchesPerRead.txt`, `summaryStatistics.txt`).
+    - `reads_per_level.txt`: read counts per graph level.
+    - `extraction.bam`, `extraction.bam.bai`, `extraction_mapped.bam`, `extraction_unmapped.bam`, `remapped_with_a.bam`, `remapped_with_a.bam.bai`, `R_1.fastq`, `R_2.fastq`, `R_U.fastq`: HLA-LA's own intermediates. These are large (multiple gigabytes per sample on real WGS BAMs) and are reproducible from the input BAM, so they are not usually of interest - they appear here only because publishing this directory is all-or-nothing, as explained below.
 
 </details>
 
 HLA-LA runs only when `--wgs_samples` is provided.
 The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` column and extracts allele calls from column 3 of each `R1_bestguess_G.txt` after the header.
+
+**The per-sample `hlala/<sample_id>/` directory is published as hard links, not copies, and this imposes a hard requirement: `--outdir` and the Nextflow work directory must be on the same filesystem.** If they are not, the run aborts with `Failed to publish file: ... [link]` - Nextflow does not fall back to copying. See [usage docs](usage.md#requirement---outdir-and-the-nextflow-work-directory-must-share-a-filesystem) for the reasoning, the HPC caveat, and the custom-config workaround.
+
+The short version: the `HLALA_TYPING` module declares each per-sample output directory as an output *and* individual files nested inside it, and Nextflow (verified on 26.04.4) then offers only the enclosing directory to `publishDir`, never the nested paths - so publishing from this process is all-or-nothing, with no way to keep just the typing results without patching the module. Publishing everything by copy would duplicate the multi-gigabyte intermediates for every WGS sample, so `mode: 'link'` is used instead: hard links cost no additional disk space, and (unlike symlinks) the published files remain valid real files after the work directory is deleted. See the `HLALA_TYPING` entry in `conf/modules.config`.
+
+Two files published by earlier versions of this pipeline are gone: `<sample_id>/hla.tar.gz` (the `hla/` directory is published unarchived instead) and `<sample_id>/hlala.log` (HLA-LA's stdout is no longer redirected to a file; it is captured in the task's `.command.out` under the work directory).
 
 ### HLA consensus
 

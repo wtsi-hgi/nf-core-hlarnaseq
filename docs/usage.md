@@ -88,16 +88,17 @@ NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdat
 | --------------- | -------------------------------------------------------------------------- |
 | `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.  |
 | `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.  |
-| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must end in `.bai`. |
+| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must be named `<BAM file name>.bai` (i.e. end in `.bam.bai`). |
 
 Each row is validated and loaded as a separate WGS sample channel entry. Relative BAM and BAI paths are resolved from the directory containing the WGS samplesheet, the launch directory, or the pipeline project directory. An [example WGS samplesheet](../assets/wgs_samples.csv) has been provided with the pipeline.
 
-When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.tsv`.
-HLA-LA, samtools, and the prepared HLA-LA graph data must already be available in the active runtime environment.
-The pipeline does not download, prepare, or package HLA-LA graph data in this early development stage.
+The index must be named exactly `<BAM file name>.bai` (for example `NA12878.bam` + `NA12878.bam.bai`), not `<BAM base name>.bai`: HLA-LA resolves a BAM's index by appending `.bai` to the BAM path, and will not find an index named otherwise. This is enforced by [`assets/schema_wgs_samples.json`](../assets/schema_wgs_samples.json), so a mismatch fails at samplesheet validation rather than deep inside HLA-LA.
 
-Provide the parent directory containing the prepared graph with `--hlala_graph_dir`.
-The graph name defaults to `PRG_MHC_GRCh38_withIMGT` and can be changed with `--hlala_graph`.
+When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.tsv`.
+HLA-LA itself (and the samtools/bwa/picard tooling it shells out to) is provisioned by the `HLALA_TYPING` module's own `environment.yml`/`conda` directive and matching pinned `container` (`hla-la=1.0.4`), resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. No separate operator-prepared Conda environment is needed for this step.
+
+The prepared HLA-LA **graph**, however, remains a required, separately-prepared input: the pipeline never downloads, builds, or packages HLA-LA graph data (the `hlala/preparegraph` step is deliberately not wired in), the same pattern as `--arcashla_reference_dir` for arcasHLA above.
+Provide the **parent** directory containing the prepared graph with `--hlala_graph_dir`, and the **graph directory's own name** with `--hlala_graph` (defaults to `PRG_MHC_GRCh38_withIMGT`) - i.e. the graph the pipeline uses is `<hlala_graph_dir>/<hlala_graph>`.
 
 ```bash
 nextflow run nf-core/hlarnaseq \
@@ -107,6 +108,33 @@ nextflow run nf-core/hlarnaseq \
     --hlala_graph_dir /path/to/HLA-LA/graphs \
     --outdir ./results
 ```
+
+### Requirement: `--outdir` and the Nextflow work directory must share a filesystem
+
+**When `--wgs_samples` is used, `--outdir` and the Nextflow work directory (`-w`, default `./work`) must be on the same filesystem.** This is a hard requirement, not a recommendation.
+
+HLA-LA's per-sample output directory is published with `mode: 'link'` (hard links) rather than the pipeline's usual `copy` - see the `HLALA_TYPING` entry in `conf/modules.config`. The `HLALA_TYPING` module declares its per-sample output directory as an output alongside individual files inside it, which makes publishing all-or-nothing (Nextflow offers only the directory to `publishDir`, never the nested paths), and publishing everything by copy would duplicate HLA-LA's multi-gigabyte intermediates (`extraction*.bam`, `remapped_with_a.bam`, `R_{1,2,U}.fastq`) for every WGS sample. Hard links make that free.
+
+Hard links cannot cross filesystems, and **Nextflow does not fall back to copying**: if `--outdir` is on a different filesystem than the work directory, the run aborts with
+
+```
+Failed to publish file: /path/to/work/xx/xxxxxx/<sample_id>; to: /path/to/outdir/hlala/<sample_id> [link]
+```
+
+This is easy to hit on HPC, where the normal layout is `--outdir` on shared/project storage and `-w` on fast local scratch. Either put both on the same filesystem, or override the publishing mode in a custom config passed with `-c`:
+
+```groovy title="hlala_copy.config"
+process {
+    withName: 'HLALA_TYPING' {
+        publishDir = [
+            path: { "${params.outdir}/hlala" },
+            mode: 'copy'
+        ]
+    }
+}
+```
+
+Be aware that this reintroduces the multi-gigabyte-per-sample duplication that `'link'` exists to avoid. `'symlink'`/`'rellink'` are cheaper alternatives, but the published results then break as soon as the work directory is cleaned.
 
 ## RNA/WGS sample key input
 

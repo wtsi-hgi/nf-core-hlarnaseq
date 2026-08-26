@@ -22,8 +22,8 @@
             "WGS_BAI_path": {
                 "type": "string",
                 "format": "file-path",
-                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bai|BAI)$",
-                "errorMessage": "WGS BAI path must be provided, cannot contain spaces and must have extension '.bai'"
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.(bam|BAM)\\.(bai|BAI)$",
+                "errorMessage": "WGS BAI path must be provided, cannot contain spaces and must be named '<BAM file name>.bai' (i.e. end in '.bam.bai'), because HLA-LA resolves a BAM's index as '<BAM>.bai' and will not find an index named otherwise"
             }
         },
         "required": ["WGS_sample_id", "WGS_BAM_path", "WGS_BAI_path"]
