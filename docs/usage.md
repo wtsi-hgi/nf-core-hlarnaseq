@@ -84,10 +84,10 @@ WGS_sample_id,WGS_BAM_path,WGS_BAI_path
 NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam.bai
 ```
 
-| Column          | Description                                                                |
-| --------------- | -------------------------------------------------------------------------- |
-| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.  |
-| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.  |
+| Column          | Description                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.                                            |
+| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.                                            |
 | `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must be named `<BAM file name>.bai` (i.e. end in `.bam.bai`). |
 
 Each row is validated and loaded as a separate WGS sample channel entry. Relative BAM and BAI paths are resolved from the directory containing the WGS samplesheet, the launch directory, or the pipeline project directory. An [example WGS samplesheet](../assets/wgs_samples.csv) has been provided with the pipeline.
@@ -108,6 +108,31 @@ nextflow run nf-core/hlarnaseq \
     --hlala_graph_dir /path/to/HLA-LA/graphs \
     --outdir ./results
 ```
+
+### Preparing the HLA-LA graph
+
+Prepare the graph once, out of band, with:
+
+```bash
+scripts/build_reference_hlala.sh /path/to/HLA-LA/graphs
+```
+
+This downloads the published PRG graph package (`PRG_MHC_GRCh38_withIMGT`, ~2.25 GB), verifies its md5, extracts it, and indexes it (`HLA-LA --action prepareGraph`) inside the same pinned `hla-la:1.0.4` container image `HLALA_TYPING` itself runs - so the graph is serialized by the exact build that will later consume it. Unlike arcasHLA's image, this one is public (Biocontainers/Galaxy depot), so there is no companion image-build script: the container is pulled on first use. Docker is used when its daemon is reachable, otherwise Singularity/Apptainer.
+
+Budget for it before starting:
+
+- **~29 GB on disk** for the extracted and indexed graph (`serializedGRAPH` alone is ~5.5 GB), plus the 2.25 GB tarball. The script checks free space on the target filesystem up front (override the floor with `REQUIRED_GB`) rather than failing hours in.
+- **A few hours**, and per HLA-LA's own README indexing "might take up to 40G of memory". The script warns if the machine has less than 40 GB of RAM but still proceeds.
+
+Re-running the script is free: if `<output-dir>/<graph>/serializedGRAPH` already exists and is non-empty, it reports the graph as already built and exits without downloading, extracting, or indexing anything - that check runs _before_ the download. **To rebuild, delete the graph directory and re-run**; that is deliberately the only supported way, so there is no "force" flag that could half-overwrite an existing graph. An interrupted run that already extracted the package resumes at the indexing step instead of re-downloading. `GRAPH_NAME`, `GRAPH_URL`, `GRAPH_MD5`, `TARBALL` (use an already-downloaded copy), `IMAGE_TAG`, `SIF_PATH`, and `REQUIRED_GB` are all overridable - see `scripts/build_reference_hlala.sh --help`.
+
+On success the script prints the exact parameters to pass:
+
+```bash
+--hlala_graph_dir /path/to/HLA-LA/graphs --hlala_graph PRG_MHC_GRCh38_withIMGT
+```
+
+**Limitation: the script fetches and indexes a _published_ graph; it cannot construct one from scratch.** This is not an unfinished feature - building a PRG graph for a newer IMGT/HLA release or for custom loci is not scriptable outside the tool author's own environment. HLA-LA's own `src/Update graphs.txt` documents that workflow as Perl scripts run on the author's Windows laptop, plus the separate older MHC-PRG v1 binary (not shipped in the bioconda `hla-la` package), hardcoded cluster paths, and input files that were never distributed. A newer graph is an upstream request to the HLA-LA authors. The `GRAPH_NAME`/`GRAPH_URL`/`GRAPH_MD5` overrides exist so other _published_ graph packages, an offline mirror, or a future move of the download host work without editing the script.
 
 ### Requirement: `--outdir` and the Nextflow work directory must share a filesystem
 
@@ -151,10 +176,10 @@ rnaseq_sample_id,wgs_sample_id
 RNA_SAMPLE_1,WGS_SAMPLE_1
 ```
 
-| Column             | Description                                                          |
-| ------------------- | --------------------------------------------------------------------- |
-| `rnaseq_sample_id`  | RNA sample identifier; must match a `rna_id` from `--rna_samples`.     |
-| `wgs_sample_id`     | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
+| Column             | Description                                                               |
+| ------------------ | ------------------------------------------------------------------------- |
+| `rnaseq_sample_id` | RNA sample identifier; must match a `rna_id` from `--rna_samples`.        |
+| `wgs_sample_id`    | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
 
 One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file (or, when `--wgs_samples` is not provided at all, every RNA sample) is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample. A `--sample_key` file with zero data rows is valid and simply routes every RNA sample through the `RNA_ONLY:<rna_id>` fallback.
 
