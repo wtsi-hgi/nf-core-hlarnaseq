@@ -31,6 +31,31 @@ HLA_BAM="${HLA_DIR}/NA12878.chr6_hla.GRCh38.bam"
 HLA_BAI="${HLA_BAM}.bai"
 HLA_TMP_BAM="${HLA_BAM}.tmp"
 
+# NA12878 / GM12878 Illumina HumanOmniExpress-24 v1.0 SNP array (GSE96790).
+# Used to produce PLINK BED/BIM/FAM genotypes for HIBAG HLA imputation.
+ARRAY_DIR="${DATA_DIR}/array"
+ARRAY_IDAT_DIR="${ARRAY_DIR}/idat"
+ARRAY_FINAL_REPORT_DIR="${ARRAY_DIR}/final_report"
+ARRAY_MANIFEST="${ARRAY_DIR}/manifest.tsv"
+ARRAY_HIBAG_DIR="${FINAL_TESTDATA_DIR}/array"
+
+ARRAY_GEO_BASE_URL="https://ftp.ncbi.nlm.nih.gov/geo/samples"
+ARRAY_PLATFORM="IlluminaHumanOmniExpress-24v1-0"
+ARRAY_REPORT_PLATFORM="HumanOmniExpress-24v1-0"
+
+# Array positions are GRCh37/hg19, matching the published HIBAG pre-fit models.
+# The default region is a deliberate superset of HIBAG's own xMHC import window
+# so that HIBAG stays the authority on the exact boundary. Use "all" to keep
+# every SNP.
+ARRAY_REGION="${ARRAY_REGION:-6:25000000-34000000}"
+ARRAY_SAMPLE_ID="${ARRAY_SAMPLE_ID:-NA12878}"
+ARRAY_PLINK_PREFIX="${ARRAY_HIBAG_DIR}/${ARRAY_SAMPLE_ID}.omniexpress.xMHC.hg19"
+
+# GSM2544146 is the second technical replicate; the IDATs cannot be genotyped
+# without a licensed BPM/EGT manifest and are downloaded for provenance only.
+INCLUDE_REPLICATE="${INCLUDE_REPLICATE:-0}"
+INCLUDE_IDAT="${INCLUDE_IDAT:-1}"
+
 RNA_DIR="${DATA_DIR}/rna"
 RNA_DOWNLOAD_DIR="${DATA_DIR}/gm12878_rnaseq_fastq"
 RNA_FASTQ_ROOT="${RNA_DOWNLOAD_DIR}/fastq"

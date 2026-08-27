@@ -8,6 +8,7 @@ The final compact bundle for hlarnaseq defaults to:
 
 ```text
 testdata-make/data/hlarnases-testdata/
+  array/
   reference/
   rnaseq/
     gene_counts/
@@ -26,6 +27,7 @@ Run these scripts from an environment that provides:
 - `wget` or `curl`
 - `gzip`
 - `samtools`
+- `python3` (standard library only), for the SNP-array conversion
 - standard POSIX shell utilities
 
 For this early development stage, these tools are expected to come from the
@@ -208,6 +210,85 @@ rna_sample_id,genome_sample_id,star_bam_path,gene_counts_path,unmapped_fastq_r1,
 In this compact manifest, `star_bam_path` points to the extracted HLA-region
 BAM, not the full STAR genome BAM in the nf-core/rnaseq output directory.
 
+## NA12878 SNP-Array Data for HIBAG
+
+HIBAG imputes HLA alleles from GWAS SNP genotypes, so it needs microarray data
+rather than sequencing reads. This step downloads the NA12878 / GM12878
+Illumina HumanOmniExpress-24 v1.0 array data from GEO and converts it to the
+PLINK BED/BIM/FAM genotype set that `HIBAG::hlaBED2Geno()` reads:
+
+```bash
+testdata-make/10-prepare-na12878-array-hibag
+```
+
+Outputs:
+
+- `hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bed`
+- `hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bim`
+- `hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.fam`
+- `hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.log`
+- `data/array/manifest.tsv`
+- `data/array/final_report/`, `data/array/idat/`
+
+Like the other download steps, this one is idempotent: files that are already
+present and non-empty are not fetched again.
+
+### Data source
+
+GEO series GSE96790 / GSE96909, sample `GSM2544145` (array position
+`9721380046_R03C01`). `GSM2544146` is a second technical replicate of the same
+sample and is fetched only when `INCLUDE_REPLICATE=1`.
+
+- `https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2544nnn/GSM2544145/suppl/`
+
+OmniExpress is a good match for HIBAG because the published pre-fit models were
+built from SNPs common to Illumina platforms including OmniExpress.
+
+### How genotypes are derived
+
+**The Nexus FinalReport contains no genotype calls.** Its data columns are:
+
+```text
+Sample Name  Sample ID  SNP Name  Chr  Position
+Log R Ratio  B Allele Freq  GC Score  SNP
+```
+
+There is no `GType` and no `Allele1 - Top` / `Allele2 - Top`, so genotypes are
+derived from the B Allele Freq (BAF) clusters together with the `[A/B]` allele
+pair in the `SNP` column:
+
+- `GC Score` below 0.15 → missing
+- BAF below 0.15 → homozygous A; BAF above 0.85 → homozygous B
+- BAF between 0.35 and 0.65 → heterozygous
+- anything else → missing
+
+This approximates GenomeStudio's clustering rather than reproducing it. On this
+sample it is well behaved — BAF is cleanly trimodal and about 0.3% of xMHC SNPs
+fall in the ambiguous gap — but the calls are not identical to a GenomeStudio
+`GType` column, and the conversion log says so. The two technical replicates
+agree at 99.98% of jointly called xMHC SNPs.
+
+The `.idat.gz` files are downloaded for provenance only. Genotyping them would
+require the licensed `humanomniexpress-24v1-0_a.bpm` manifest, an EGT cluster
+file and Illumina's `iaap-cli`/GenomeStudio.
+
+The Illumina A allele is written as PLINK A1 and the B allele as A2, because
+HIBAG reports the dosage of the first `.bim` allele. Strand-ambiguous A/T and
+C/G SNPs cannot be resolved by allele comparison alone; the conversion log
+reports how many there are, and `HIBAG::hlaGenoSwitchStrand()` handles the rest
+at prediction time.
+
+### Genome build and region
+
+Array positions are GRCh37/hg19, matching the published HIBAG pre-fit models
+for InfiniumOmniExpress-24v1-0, so no liftover is needed. Read the files with
+`assembly = "hg19"`.
+
+`ARRAY_REGION` defaults to `6:25000000-34000000`, a deliberate superset of
+HIBAG's own xMHC import window, so HIBAG stays the authority on the exact
+boundary and the pre-filter only keeps the artifact small. Set
+`ARRAY_REGION=all` to keep every SNP genome-wide.
+
 Useful overrides:
 
 - `FINAL_TESTDATA_DIR`: final compact bundle root; defaults to `data/hlarnases-testdata`.
@@ -228,3 +309,9 @@ Useful overrides:
 - `RNA_HLARNASEQ_DIR`: final RNA compact bundle directory; defaults to `data/hlarnases-testdata/rnaseq`.
 - `RNA_UNMAPPED_FASTQ_DIR`: compact output directory for copied unmapped FASTQs; defaults to `data/hlarnases-testdata/rnaseq/unmapped_fastq`.
 - `RNA_GENE_COUNTS_DIR`: compact output directory for per-sample gene count tables; defaults to `data/hlarnases-testdata/rnaseq/gene_counts`.
+- `ARRAY_REGION`: region kept by the SNP-array conversion, or `all`; defaults to `6:25000000-34000000` (hg19).
+- `ARRAY_SAMPLE_ID`: PLINK sample ID and output filename stem; defaults to `NA12878`.
+- `ARRAY_HIBAG_DIR`: compact output directory for the HIBAG genotypes; defaults to `hlarnases-testdata/array`.
+- `ARRAY_DIR`: SNP-array download directory; defaults to `data/array`.
+- `INCLUDE_REPLICATE`: set to `1` to also fetch GSM2544146, the second technical replicate; defaults to `0`.
+- `INCLUDE_IDAT`: set to `0` to skip the IDAT downloads (~10 MB per sample); defaults to `1`.
