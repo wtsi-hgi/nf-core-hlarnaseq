@@ -34,6 +34,10 @@
 
 > Tretyakov K, Halbert CL. intervaltree: Editable interval tree data structure for Python. PyPI package: https://pypi.org/project/intervaltree/. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
 
+## [validatefastq](https://github.com/biopet/validatefastq)
+
+> Biopet team, Leiden University Medical Center. validatefastq: validate a FASTQ file, or a pair of FASTQ files, checking record structure, duplicate reads, matching mate headers and counts, and quality encoding. Packaged for Bioconda as `biopet-validatefastq`. GitHub repository: https://github.com/biopet/validatefastq. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+
 ## [SAMtools](https://doi.org/10.1093/gigascience/giab008)
 
 > Danecek P, Bonfield JK, Liddle J, Marshall J, Ohan V, Pollard MO, Whitwham A, Keane T, McCarthy SA, Davies RM, Li H. Twelve years of SAMtools and BCFtools. GigaScience. 2021;10(2):giab008. doi: 10.1093/gigascience/giab008.

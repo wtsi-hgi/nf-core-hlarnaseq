@@ -17,7 +17,7 @@
                     "arcasHLA": "unknown"
                 },
                 "ARCASHLA_VALIDATE_FASTQ": {
-                    "validatefastq": "0.1.1"
+                    "biopet-validatefastq": "0.1.1"
                 },
                 "HLAPM_BUILD_REF": {
                     "R": "unknown",

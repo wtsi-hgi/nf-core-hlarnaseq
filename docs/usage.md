@@ -38,7 +38,9 @@ All columns are mandatory and each `rna_id` may occur only once. Relative file p
 
 For each sample, the pipeline extracts complete pairs overlapping this region, excludes secondary and supplementary alignments, and combines the recovered mates with the supplied FASTQs. An [example RNA samplesheet](../assets/rna_samples.csv) is included.
 
-Each extracted read pair is checked with `validatefastq` before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
+Each extracted read pair is checked with [validatefastq](https://github.com/biopet/validatefastq) before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
+
+`ARCASHLA_VALIDATE_FASTQ` provisions the validator itself, via its own module `environment.yml`/`conda` directive (`bioconda::biopet-validatefastq=0.1.1`) paired with the matching pinned Biocontainers image, resolved automatically under `-profile conda`/`docker`/`singularity`/`apptainer`. Nothing needs to be installed by hand, and no operator-prepared Conda environment is used for this step. Note that the packaged executable is named `biopet-validatefastq` (there is no plain `validatefastq` alias); running the pipeline with no container/Conda profile at all leaves the module unprovisioned and it will fail fast saying so.
 
 Once a sample's extracted reads pass validation, the pipeline runs `arcasHLA genotype` on them, requesting the genes listed in `--arcashla_genes` (a broad default gene list is provided). Per-sample results are written to `arcashla/genotype/<rna_id>.genotype.json` (+ `.log`).
 
@@ -271,7 +273,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment; arcasHLA genotyping provisions its own tool environment/container automatically, as described above.
+This early-stage pipeline expects samtools to be available in the active Conda environment; read-pair validation and arcasHLA genotyping provision their own tool environment/container automatically, as described above.
 
 > [!NOTE]
 > `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.

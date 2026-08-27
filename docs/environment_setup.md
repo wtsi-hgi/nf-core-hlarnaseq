@@ -39,12 +39,13 @@ The other 2 are consumed automatically by name and never need manual activation.
   `conda env export --from-history` and hand-trimmed to the packages each
   step actually needs; version floors/pins mirror `docs/usage.md`, which
   remains the source of truth for per-parameter detail.
-- `ARCASHLA_GENOTYPE`, `HLALA_TYPING`, and STAR
+- `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`, `HLALA_TYPING`, and STAR
   (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions to the
   "operator-prepared Conda environment" model above: each comes from its own
   module-owned `conda`/`environment.yml` and `container` directive, resolved
   automatically via `-profile conda`/`singularity`/`docker`, not from any
   environment in the table above. See
+  [usage docs](usage.md#rna-samplesheet-input),
   [usage docs](usage.md#arcashla-genotyping-environment),
   [usage docs](usage.md#wgs-samplesheet-input), and
   [usage docs](usage.md#hlapm-star-index) for details.

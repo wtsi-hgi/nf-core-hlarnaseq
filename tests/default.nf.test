@@ -119,7 +119,14 @@ nextflow_pipeline {
 
     test("reject mismatched extracted FASTQ pair") {
 
-        config "../conf/test.config"
+        // This is the only test that actually invokes validatefastq (every
+        // other test either fails at parameter/samplesheet validation or runs
+        // -stub-run). It therefore uses a config that enables a container
+        // engine on top of conf/test.config, so ARCASHLA_VALIDATE_FASTQ
+        // provisions the validator from its own container directive instead of
+        // relying on a host-installed executable - which is the whole point of
+        // that module's environment.yml/container pairing.
+        config "../tests/singularity.config"
 
         when {
             params {

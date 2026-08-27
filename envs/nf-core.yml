@@ -1,11 +1,15 @@
 # nf-core/hlarnaseq: main runtime environment.
-# The environment Nextflow itself runs in - also provides samtools,
-# validatefastq's Java runtime, and the Python/R interpreters used by
-# bin/call_hla_consensus.py, bin/consensus_to_hlapm.py, and
-# bin/combine_arcashla_genotypes.R. See docs/environment_setup.md.
+# The environment Nextflow itself runs in - also provides samtools and the
+# Python/R interpreters used by bin/call_hla_consensus.py,
+# bin/consensus_to_hlapm.py, and bin/combine_arcashla_genotypes.R.
+# See docs/environment_setup.md.
 #
-# validatefastq itself is NOT a Conda package - install it separately
-# (see docs/environment_setup.md) using the openjdk provided here.
+# ARCASHLA_VALIDATE_FASTQ's validator is NOT listed here and no longer needs
+# to be installed by hand: it now comes from that module's own
+# environment.yml / container directive (bioconda::biopet-validatefastq),
+# resolved by Nextflow under -profile conda/docker/singularity/apptainer.
+# No openjdk entry is needed here either - that module's own environment
+# pulls in the Java runtime its validator requires.
 channels:
   - conda-forge
   - bioconda
