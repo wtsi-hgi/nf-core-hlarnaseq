@@ -56,6 +56,23 @@ ARRAY_PLINK_PREFIX="${ARRAY_HIBAG_DIR}/${ARRAY_SAMPLE_ID}.omniexpress.xMHC.hg19"
 INCLUDE_REPLICATE="${INCLUDE_REPLICATE:-0}"
 INCLUDE_IDAT="${INCLUDE_IDAT:-1}"
 
+# Published HIBAG pre-fit models ("HLARES" parameter estimates, Zheng et al.
+# 2014), built from SNPs common to the Illumina 1M Duo, OmniQuad, OmniExpress,
+# 660K and 550K platforms - which is why they suit the OmniExpress test data.
+# Four ancestries x two assemblies are published; NA12878 is CEU, so European
+# on hg19 is the default.
+HIBAG_MODEL_BASE_URL="https://hibag.s3.amazonaws.com/download/hlares_param"
+HIBAG_ANCESTRY="${HIBAG_ANCESTRY:-European}"
+HIBAG_MODEL_ASSEMBLY="${HIBAG_MODEL_ASSEMBLY:-hg19}"
+HIBAG_MODEL_NAME="${HIBAG_ANCESTRY}-HLA4-${HIBAG_MODEL_ASSEMBLY}.RData"
+HIBAG_MODEL="${HIBAG_MODEL:-${ARRAY_HIBAG_DIR}/${HIBAG_MODEL_NAME}}"
+
+# Observed md5 of European-HLA4-hg19.RData on 2026-08-28. Upstream publishes no
+# digest for these files, so this is a change-detector, not an authenticity
+# check, and a mismatch is a warning rather than an error - see
+# 11-download-hibag-model.
+HIBAG_MODEL_KNOWN_MD5_European_hg19="c6be4cf97794fef7e3bb571f99cda855"
+
 RNA_DIR="${DATA_DIR}/rna"
 RNA_DOWNLOAD_DIR="${DATA_DIR}/gm12878_rnaseq_fastq"
 RNA_FASTQ_ROOT="${RNA_DOWNLOAD_DIR}/fastq"

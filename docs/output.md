@@ -83,7 +83,7 @@ Two files published by earlier versions of this pipeline are gone: `<sample_id>/
 - `hibag/`
   - `HIBAG_combined.tsv`: Combined HIBAG allele calls across all SNP-array datasets, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row). **This is the same format `hlala/HLA-LA_combined.tsv` uses**, so the consensus step consumes either interchangeably.
   - `<array_sample_id>.hibag_calls.tsv`: The same three columns for one PLINK dataset, before combining.
-  - `<array_sample_id>.hibag_posterior.tsv`: Per-call diagnostics - `sample_id`, `locus`, `allele1`, `allele2`, `prob` (posterior probability), `matching`, `n_model_snps`, `n_matched_snps`. Not consumed by the pipeline; use it to judge call confidence and how much of the model matched your array.
+  - `<array_sample_id>.hibag_posterior.tsv`: Per-call diagnostics - `sample_id`, `locus`, `allele1`, `allele2`, `prob` (posterior probability), `matching`, `n_model_snps`, `n_matched_snps`. Not consumed by the pipeline; use it to judge call confidence and how much of the model matched your array. A low `n_matched_snps / n_model_snps` ratio is the strongest signal that a call should not be trusted, which is why `--hibag_min_matched_snps` fails the run below a threshold rather than letting it through.
 
 </details>
 

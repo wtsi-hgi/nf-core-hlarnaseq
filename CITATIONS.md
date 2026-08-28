@@ -21,6 +21,8 @@
 ## [HIBAG](https://doi.org/10.1038/tpj.2013.18)
 
 > Zheng X, Shen J, Cox C, Wakefield JC, Ehm MG, Nelson MR, Weir BS. HIBAG-HLA genotype imputation with attribute bagging. Pharmacogenomics J. 2014 Apr;14(2):192-200. doi: 10.1038/tpj.2013.18.
+>
+> The published pre-fit models fetched by `testdata-make/11-download-hibag-model` (the "HLARES" parameter estimates, from GlaxoSmithKline clinical trials and HapMap Phase 2) are distributed with this paper at https://hibag.s3.amazonaws.com/. Upstream states no licence for them, only a request to cite the publication above; they are downloaded into gitignored test data and are not redistributed by this pipeline.
 
 ## [HLApm](https://github.com/davenportlab/HLApm)
 

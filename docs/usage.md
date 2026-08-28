@@ -224,6 +224,26 @@ Set `--hibag_match_type` to whichever criterion the message says will work. The 
 
 `--hibag_min_prob` (default `0`, i.e. no filtering) drops calls whose posterior probability falls below the threshold. The default matches the HLA-LA path, which applies no confidence filter either.
 
+### :warning: Partial SNP overlap is rejected, not warned about
+
+HIBAG does **not** fail when only some of a model's SNPs are found. It returns confident-looking alleles computed from whatever matched, and they can simply be wrong. Observed against a published model whose rsIDs had gone stale: at 13 of 273 matched SNPs it reported a homozygous `C*07:01`/`C*07:01`, where the same data and model at 271 of 273 gave the correct `C*01:02`/`C*07:01`.
+
+`--hibag_min_matched_snps` (default `0.5`) therefore fails the run when fewer than that fraction of a locus's model SNPs are found, with the same diagnostic table as the zero-overlap error. The per-locus matched fraction is logged for every run and recorded in `<array_sample_id>.hibag_posterior.tsv` as `n_model_snps` / `n_matched_snps`.
+
+Set it to `0` to disable the check, only if you accept unreliable calls.
+
+### Getting a multi-locus model
+
+The model bundled with the HIBAG R package covers **HLA-A only**, so a run using it reports one locus. For the test data, `testdata-make/11-download-hibag-model` fetches a published model covering A, B, C, DRB1, DQA1, DQB1 and DPB1:
+
+```bash
+testdata-make/11-download-hibag-model
+```
+
+These are the "HLARES" parameter estimates of Zheng et al. (2014), built from SNP markers common to the Illumina 1M Duo, OmniQuad, OmniExpress, 660K and 550K platforms. Four ancestries are published (`HIBAG_ANCESTRY`: European, Asian, Hispanic, African) in hg18 and hg19 (`HIBAG_MODEL_ASSEMBLY`); European/hg19 is the default and is the right one for NA12878.
+
+They carry accurate hg19 positions but 2012-era rsIDs, many of which have since been merged or retired, so they need `--hibag_match_type Pos+Allele` — rsID matching finds only a few percent of each model's SNPs. `pipeline_testdata_run.sh` sets this for you.
+
 ### HIBAG dependency
 
 Unlike most steps, `HIBAG_PREDICT` currently has **no `conda`/`container` directive of its own**: it takes the `HIBAG` R package from the ambient environment, which is expected to be the `nf-core` environment described in [`envs/nf-core.yml`](../envs/nf-core.yml) (`bioconductor-hibag`). The module fails with an explicit message if `Rscript` or the package is missing. Moving this step onto the standard nf-core `environment.yml` + container pattern is a planned follow-up.

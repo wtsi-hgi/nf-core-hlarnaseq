@@ -208,6 +208,15 @@
                     "help_text": "Defaults to 0, i.e. no filtering, matching the HLA-LA path which applies no confidence filter either. Raise it to discard low-confidence imputations before consensus calling.",
                     "fa_icon": "fas fa-percent"
                 },
+                "hibag_min_matched_snps": {
+                    "type": "number",
+                    "default": 0.5,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Minimum fraction of a locus's model SNPs that must be found in the array data before HIBAG will impute that locus.",
+                    "help_text": "Guards against silently wrong calls. HIBAG does not fail on poor SNP overlap - it returns confident-looking but unreliable alleles - so this check fails the run instead, reporting how many SNPs each --hibag_match_type criterion would find and which to switch to. Set to 0 to disable, only if you accept unreliable calls.",
+                    "fa_icon": "fas fa-shield-alt"
+                },
                 "hlapm_repo": {
                     "type": "string",
                     "format": "directory-path",

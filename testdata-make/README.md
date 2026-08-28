@@ -289,6 +289,58 @@ HIBAG's own xMHC import window, so HIBAG stays the authority on the exact
 boundary and the pre-filter only keeps the artifact small. Set
 `ARRAY_REGION=all` to keep every SNP genome-wide.
 
+### Downloading a multi-locus HIBAG model
+
+The model bundled with the HIBAG R package covers **HLA-A only**, so a pipeline
+run using it reports one locus. Fetch a published model covering all seven
+classical loci:
+
+```bash
+testdata-make/11-download-hibag-model
+```
+
+Output: `hlarnases-testdata/array/European-HLA4-hg19.RData` (14 MB), a named
+list of seven `hlaAttrBagObj` (A, B, C, DRB1, DQA1, DQB1, DPB1), all hg19,
+two-field resolution. The script validates the file structurally after
+downloading and prints the locus/SNP/allele table.
+
+These are the "HLARES" parameter estimates of Zheng et al. (2014), built from
+SNP markers common to the Illumina 1M Duo, OmniQuad, OmniExpress, 660K and 550K
+platforms - which is why they suit the OmniExpress data prepared above. Four
+ancestries are published, in hg18 and hg19:
+
+```text
+https://hibag.s3.amazonaws.com/download/hlares_param/<Ancestry>-HLA4-<assembly>.RData
+```
+
+NA12878 is CEU, so European/hg19 is the default. Select others with
+`HIBAG_ANCESTRY` (European, Asian, Hispanic, African) and
+`HIBAG_MODEL_ASSEMBLY` (hg19, hg18).
+
+Upstream publishes **no checksum and no licence** for these files - only a
+request to cite the paper. The recorded md5 in `lib/config.sh` is therefore a
+change-detector, not an authenticity check, and a mismatch is a warning rather
+than an error; the structural validation is what decides whether the file is
+usable. Because the model is downloaded into gitignored test data rather than
+committed, the absent licence does not affect this repository.
+
+### :warning: These models need `--hibag_match_type Pos+Allele`
+
+They carry accurate hg19 positions but 2012-era rsIDs, many since merged or
+retired. Against a current Illumina manifest:
+
+| `--hibag_match_type` | model SNPs found (HLA-A) |
+| --- | --- |
+| `Pos+Allele` | 271 of 273 |
+| `RefSNP+Position` | 13 of 273 |
+| `RefSNP` | 13 of 273 |
+
+The pipeline default is `RefSNP+Position`, which is correct for a model built
+against your own current manifest but wrong for these.
+`pipeline_testdata_run.sh` sets `Pos+Allele` for you, and the pipeline's
+`--hibag_min_matched_snps` guard (default 0.5) fails the run rather than
+returning the untrustworthy calls that low overlap produces.
+
 Useful overrides:
 
 - `FINAL_TESTDATA_DIR`: final compact bundle root; defaults to `data/hlarnases-testdata`.
@@ -315,3 +367,6 @@ Useful overrides:
 - `ARRAY_DIR`: SNP-array download directory; defaults to `data/array`.
 - `INCLUDE_REPLICATE`: set to `1` to also fetch GSM2544146, the second technical replicate; defaults to `0`.
 - `INCLUDE_IDAT`: set to `0` to skip the IDAT downloads (~10 MB per sample); defaults to `1`.
+- `HIBAG_ANCESTRY`: published HIBAG model ancestry - European, Asian, Hispanic, or African; defaults to `European`.
+- `HIBAG_MODEL_ASSEMBLY`: published HIBAG model assembly - `hg19` or `hg18`; defaults to `hg19`.
+- `HIBAG_MODEL`: full output path for the model, overriding the two above.

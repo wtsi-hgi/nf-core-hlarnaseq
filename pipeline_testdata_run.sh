@@ -19,9 +19,10 @@ Environment:
                      Default: <repo>/assets/wgs_samples.csv
   ARRAY_SAMPLESHEET  SNP-array samplesheet path (HIBAG path).
                      Default: <repo>/assets/array_samples.csv
-  HIBAG_MODEL        Pre-fit HIBAG model .RData.
-                     Default: <repo>/tests/fixtures/hibag/ModelList.RData
-  HIBAG_MATCH_TYPE   HIBAG SNP matching criterion. Default: RefSNP
+  HIBAG_MODEL        Pre-fit HIBAG model .RData. Default: the published
+                     multi-locus model fetched by
+                     testdata-make/11-download-hibag-model
+  HIBAG_MATCH_TYPE   HIBAG SNP matching criterion. Default: Pos+Allele
   HLA_REGION         Region passed unchanged to samtools. Default: chr6:28500000-33400000
 
 Genotype-side HLA calls come from HIBAG (SNP arrays) in this script. HLA-LA
@@ -48,14 +49,16 @@ ARCASHLA_REF="${ROOT_DIR}/testdata-make/hlarnases-testdata/arcashla-ref"
 # Only needed if the HLA-LA options below are uncommented.
 HLALA_GRAPHS="${ROOT_DIR}/testdata-make/hlarnases-testdata/hla-la_graphs"
 
-# HIBAG's own bundled example model (HLA-A only), vendored as a test fixture.
-# Replace it with a model built for the OmniExpress platform to call more loci.
-HIBAG_MODEL="${HIBAG_MODEL:-${ROOT_DIR}/tests/fixtures/hibag/ModelList.RData}"
-# That model stores SNP positions 1 bp below the Illumina manifest coordinates
-# the testdata genotypes use, so only rsID matching finds its SNPs. A model
-# matched to your own array should use the stricter default,
-# RefSNP+Position. See tests/fixtures/hibag/README.md.
-HIBAG_MATCH_TYPE="${HIBAG_MATCH_TYPE:-RefSNP}"
+# The published multi-locus model (A, B, C, DRB1, DQA1, DQB1, DPB1) fetched by
+# testdata-make/11-download-hibag-model. The model bundled with the HIBAG R
+# package - this repo's test fixture - has HLA-A only, so falling back to it
+# silently would report one locus and look like a HIBAG limitation.
+HIBAG_MODEL="${HIBAG_MODEL:-${ROOT_DIR}/testdata-make/hlarnases-testdata/array/European-HLA4-hg19.RData}"
+# The published models carry accurate hg19 positions but 2012-era rsIDs, many
+# since merged or retired, so rsID matching finds only ~5% of each model's SNPs
+# while Pos+Allele finds ~98%. The pipeline default (RefSNP+Position) is right
+# for a model built against your own current manifest, not for these.
+HIBAG_MATCH_TYPE="${HIBAG_MATCH_TYPE:-Pos+Allele}"
 
 PROFILE="${PROFILE:-}"
 HLA_REGION="${HLA_REGION:-chr6:28500000-33400000}"
@@ -73,6 +76,20 @@ echo "Log: ${NEXTFLOW_LOG}"
 echo "RNA_SAMPLESHEET: $RNA_SAMPLESHEET"
 echo "ARRAY_SAMPLESHEET: $ARRAY_SAMPLESHEET"
 echo "HIBAG_MODEL: $HIBAG_MODEL (--hibag_match_type ${HIBAG_MATCH_TYPE})"
+
+if [ ! -s "${HIBAG_MODEL}" ]; then
+    cat >&2 <<EOF
+ERROR: HIBAG model not found: ${HIBAG_MODEL}
+
+Fetch it with:
+    testdata-make/11-download-hibag-model
+
+That downloads the published model covering A, B, C, DRB1, DQA1, DQB1 and
+DPB1. To run against a different model, set HIBAG_MODEL (and probably
+HIBAG_MATCH_TYPE) explicitly.
+EOF
+    exit 1
+fi
 
 if [ ! -d "$HLAPM_DIR" ]; then
     git clone https://github.com/davenportlab/HLApm.git "$HLAPM_DIR"

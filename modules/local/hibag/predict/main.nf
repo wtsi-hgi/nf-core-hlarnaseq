@@ -43,6 +43,7 @@ process HIBAG_PREDICT {
         --match-type '${params.hibag_match_type}' \\
         --assembly '${params.hibag_assembly}' \\
         --min-prob '${params.hibag_min_prob}' \\
+        --min-matched-snps '${params.hibag_min_matched_snps}' \\
         ${loci_arg}
 
     cat <<-END_VERSIONS > versions.yml

@@ -91,4 +91,80 @@ nextflow_process {
             )
         }
     }
+
+    // The dangerous case, and the reason --hibag_min_matched_snps exists:
+    // partial overlap does NOT make HIBAG fail. Left alone it returns
+    // confident-looking alleles computed from a fraction of the model's SNPs.
+    // Observed for real against a published model whose rsIDs had gone stale:
+    // 13 of 273 SNPs matched and the call was a spurious homozygous
+    // C*07:01/C*07:01, where 271 of 273 gave the correct C*01:02/C*07:01.
+    //
+    // This fixture is the same NA12878 data cut down to 50 SNPs, so 50 of the
+    // model's 266 (18.8%) match -- well above zero, well below the 0.5 default.
+    test("fails when only a fraction of the model's SNPs match, rather than returning an untrustworthy call") {
+
+        config "./nextflow.config"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        [ id: 'NA12878_sparse' ],
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.sparse.bed", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.sparse.bim", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.sparse.fam", checkIfExists: true)
+                    )
+                )
+                input[1] = file("\${projectDir}/tests/fixtures/hibag/ModelList.RData", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.failed },
+                { assert process.errorReport.contains("only 50 of the model's 266 SNPs (18.8%)") },
+                { assert process.errorReport.contains("below --min-matched-snps 0.50") },
+                // Say plainly why this is an error and not a warning.
+                { assert process.errorReport.contains("would not be trustworthy") }
+            )
+        }
+    }
+
+    // The guard must not get in the way of a good run: 264 of 266 is 99.2%.
+    test("does not block a run whose SNP overlap is high") {
+
+        config "./nextflow.config"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        [ id: 'NA12878_fixture' ],
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bed", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bim", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.fam", checkIfExists: true)
+                    )
+                )
+                input[1] = file("\${projectDir}/tests/fixtures/hibag/ModelList.RData", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert file(process.out.calls[0][1]).text.contains('A*01:01') },
+                { assert file(process.out.calls[0][1]).text.contains('A*11:01') }
+            )
+        }
+    }
 }

@@ -25,7 +25,7 @@ parse_args <- function(argv) {
     defaults <- list(
         bed = NULL, bim = NULL, fam = NULL, model = NULL, `out-prefix` = NULL,
         `match-type` = "RefSNP+Position", assembly = "hg19",
-        `min-prob` = "0", loci = NULL
+        `min-prob` = "0", `min-matched-snps` = "0.5", loci = NULL
     )
     if (length(argv) %% 2L != 0L) {
         stop("each option must be followed by a value; got an odd number of arguments", call. = FALSE)
@@ -56,6 +56,11 @@ parse_args <- function(argv) {
     args[["min-prob"]] <- suppressWarnings(as.numeric(args[["min-prob"]]))
     if (is.na(args[["min-prob"]]) || args[["min-prob"]] < 0 || args[["min-prob"]] > 1) {
         stop("--min-prob must be a number between 0 and 1", call. = FALSE)
+    }
+    args[["min-matched-snps"]] <- suppressWarnings(as.numeric(args[["min-matched-snps"]]))
+    if (is.na(args[["min-matched-snps"]]) ||
+        args[["min-matched-snps"]] < 0 || args[["min-matched-snps"]] > 1) {
+        stop("--min-matched-snps must be a fraction between 0 and 1", call. = FALSE)
     }
     args
 }
@@ -131,20 +136,39 @@ format_overlap <- function(counts, n_model_snps) {
           collapse = "\n")
 }
 
-no_overlap_error <- function(locus, match_type, counts, n_model_snps) {
-    workable <- names(counts)[counts > 0L]
-    hint <- if (length(workable) > 0L) {
-        sprintf("Try --match-type with one of: %s.", paste(workable, collapse = ", "))
-    } else {
+# Too few matched SNPs does NOT make HIBAG fail -- it quietly returns
+# confident-looking calls that are wrong. Observed with a published model whose
+# rsIDs have gone stale: 13 of 273 SNPs matched under RefSNP+Position and the
+# result was a spurious homozygous C*07:01/C*07:01, where Pos+Allele matched
+# 271 of 273 and gave the correct C*01:02/C*07:01. So low overlap is an error
+# here, not a warning.
+low_overlap_error <- function(locus, match_type, counts, n_model_snps,
+                              n_matched, min_fraction) {
+    fraction <- if (n_model_snps > 0L) n_matched / n_model_snps else 0
+    better <- names(counts)[counts > n_matched]
+    hint <- if (length(better) > 0L) {
+        sprintf("Try --match-type with one of: %s.", paste(better, collapse = ", "))
+    } else if (n_matched < 1L) {
         paste("No criterion matches any SNP. Check that the model and the array",
               "data use the same genome assembly, and that the array covers the",
               "xMHC region.")
+    } else {
+        paste("No other criterion does better. The model and the array data are",
+              "probably too poorly matched to impute this locus; lower",
+              "--min-matched-snps only if you accept unreliable calls.")
     }
-    stop(sprintf(paste0(
-        "HLA-%s: none of the model's %d SNPs match the array data under ",
-        "--match-type '%s'.\n    SNPs found under each criterion:\n%s\n    %s"),
-        locus, n_model_snps, match_type, format_overlap(counts, n_model_snps), hint),
-        call. = FALSE)
+    headline <- if (n_matched < 1L) {
+        sprintf("HLA-%s: none of the model's %d SNPs match the array data under --match-type '%s'.",
+                locus, n_model_snps, match_type)
+    } else {
+        sprintf(paste0("HLA-%s: only %d of the model's %d SNPs (%.1f%%) match the array data ",
+                       "under --match-type '%s', below --min-matched-snps %.2f.\n",
+                       "    HIBAG would still return a call at this overlap, but it would not be trustworthy."),
+                locus, n_matched, n_model_snps, 100 * fraction, match_type, min_fraction)
+    }
+    stop(sprintf("%s\n    SNPs found under each criterion:\n%s\n    %s",
+                 headline, format_overlap(counts, n_model_snps), hint),
+         call. = FALSE)
 }
 
 # -------------------------------------------------------------------------
@@ -155,6 +179,7 @@ main <- function() {
     args <- parse_args(commandArgs(trailingOnly = TRUE))
     match_type <- args[["match-type"]]
     min_prob <- args[["min-prob"]]
+    min_matched <- args[["min-matched-snps"]]
 
     geno <- hlaBED2Geno(
         bed.fn = args$bed, fam.fn = args$fam, bim.fn = args$bim,
@@ -185,11 +210,12 @@ main <- function() {
         counts <- overlap_counts(models[[locus]], geno)
         n_model_snps <- length(models[[locus]]$snp.id)
         n_matched <- unname(counts[match_type])
-        if (n_matched < 1L) {
-            no_overlap_error(locus, match_type, counts, n_model_snps)
+        if (n_matched < 1L || n_matched < min_matched * n_model_snps) {
+            low_overlap_error(locus, match_type, counts, n_model_snps, n_matched, min_matched)
         }
-        cat(sprintf("HLA-%s: %d of %d model SNPs matched under '%s'\n",
-                    locus, n_matched, n_model_snps, match_type))
+        cat(sprintf("HLA-%s: %d of %d model SNPs matched under '%s' (%.1f%%)\n",
+                    locus, n_matched, n_model_snps, match_type,
+                    100 * n_matched / n_model_snps))
 
         pred <- hlaPredict(model, geno, type = "response+prob",
                            match.type = match_type, verbose = FALSE)
