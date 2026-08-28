@@ -1,0 +1,2 @@
+array_sample_id,array_bed_path,array_bim_path,array_fam_path
+NA12878_omniexpress,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bed,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bim,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.fam

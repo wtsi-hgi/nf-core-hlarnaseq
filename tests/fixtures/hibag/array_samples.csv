@@ -1,0 +1,2 @@
+array_sample_id,array_bed_path,array_bim_path,array_fam_path
+NA12878_fixture,tests/fixtures/hibag/NA12878.array.bed,tests/fixtures/hibag/NA12878.array.bim,tests/fixtures/hibag/NA12878.array.fam

@@ -1,0 +1,94 @@
+nextflow_process {
+
+    name "Test Process HIBAG_PREDICT"
+    script "../main.nf"
+    process "HIBAG_PREDICT"
+    tag "modules"
+    tag "modules_local"
+    tag "hibag_predict"
+
+    // The fixture is NA12878's own OmniExpress genotypes subset to the SNPs of
+    // HIBAG's bundled HLA-A model, so this is a real imputation with a known
+    // right answer: NA12878 is A*01:01 / A*11:01.
+    test("imputes NA12878's known HLA-A genotype and writes it in the HLA-LA combined format") {
+
+        config "./nextflow.config"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        [ id: 'NA12878_fixture' ],
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bed", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bim", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.fam", checkIfExists: true)
+                    )
+                )
+                input[1] = file("\${projectDir}/tests/fixtures/hibag/ModelList.RData", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def lines = file(process.out.calls[0][1]).text.readLines()
+
+            assertAll(
+                // Exactly the header HLALA_COMBINE writes, so HLA_CONSENSUS
+                // can read either file with the same column names.
+                { assert lines[0] == 'sample_id\tLocus\tHLA_allele' },
+                { assert lines.size() == 3 },
+                // The correct, known answer for NA12878.
+                { assert lines[1] == 'NA12878\tA\tA*01:01' },
+                { assert lines[2] == 'NA12878\tA\tA*11:01' },
+                // call_hla_consensus.py hard-errors on an allele without '*'.
+                { assert lines.drop(1).every { it.split('\t')[2].contains('*') } },
+                // Posterior diagnostics record how much of the model matched.
+                { assert file(process.out.posterior[0][1]).text.contains('n_matched_snps') },
+                { assert file(process.out.posterior[0][1]).text.contains('264') }
+            )
+        }
+    }
+
+    // The realistic failure mode: a model whose coordinates do not line up
+    // with the array manifest. HIBAG's own error is a bare "There is no
+    // overlapping of SNPs!", so the script must say which criterion would work.
+    test("fails with an actionable message when no model SNPs match under the chosen match type") {
+
+        config "./nextflow_no_overlap.config"
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of(
+                    tuple(
+                        [ id: 'NA12878_fixture' ],
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bed", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.bim", checkIfExists: true),
+                        file("\${projectDir}/tests/fixtures/hibag/NA12878.array.fam", checkIfExists: true)
+                    )
+                )
+                input[1] = file("\${projectDir}/tests/fixtures/hibag/ModelList.RData", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.failed },
+                { assert process.errorReport.contains("none of the model's 266 SNPs match") },
+                { assert process.errorReport.contains("RefSNP+Position") },
+                // The whole point: tell the operator which setting does work.
+                { assert process.errorReport.contains("Try --match-type with one of: RefSNP") }
+            )
+        }
+    }
+}

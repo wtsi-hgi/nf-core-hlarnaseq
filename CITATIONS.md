@@ -18,6 +18,10 @@
 
 > Dilthey AT, Mentzer AJ, Carapito R, Cutland C, Cereb N, Madhi SA, Rhie A, Koren S, Bahram S, McVean G, Phillippy AM. HLA\*LA-HLA typing from linearly projected graph alignments. Bioinformatics. 2019 Nov 1;35(21):4394-4396. doi: 10.1093/bioinformatics/btz235.
 
+## [HIBAG](https://doi.org/10.1038/tpj.2013.18)
+
+> Zheng X, Shen J, Cox C, Wakefield JC, Ehm MG, Nelson MR, Weir BS. HIBAG-HLA genotype imputation with attribute bagging. Pharmacogenomics J. 2014 Apr;14(2):192-200. doi: 10.1038/tpj.2013.18.
+
 ## [HLApm](https://github.com/davenportlab/HLApm)
 
 > Davenport Lab. HLApm: personalized HLA reference building for bulk and single-cell RNA-seq. GitHub repository: https://github.com/davenportlab/HLApm. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.

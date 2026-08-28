@@ -24,7 +24,7 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
 - Extract MHC region and unmapped reads from RNASeq data
 - Validate the extracted paired FASTQ files before arcasHLA analysis
 - Call HLA reference alleles from RNASeq data with arcasHLA
-- (Optional) Call HLA reference alleles from WGS/WES data
+- (Optional) Call HLA reference alleles from WGS/WES data with HLA-LA, **or** impute them from SNP-array data with HIBAG (the two are mutually exclusive)
 - Call HLA allele consensus on RNASeq and WGS/WES data
 - Map RNASeq data to personalized references
 - Extract HLA genes counts
@@ -49,6 +49,20 @@ nextflow run wtsi-hgi/hlarnaseq \
 > Custom config files including those provided by the `-c` Nextflow option
 > can be used to provide any configuration _**except for parameters**_;
 > see [docs](https://nf-co.re/docs/usage/getting_started/configuration#custom-configuration-files).
+
+The genotype-side HLA calls are optional and come from one of two sources. Use `--wgs_samples` to type them from WGS with HLA-LA, or `--array_samples` together with `--hibag_model` to impute them from SNP-array (PLINK) data with HIBAG:
+
+```bash
+nextflow run wtsi-hgi/hlarnaseq \
+   --rna_samples rna_samples.csv \
+   --hla_region chr6:28500000-33400000 \
+   --array_samples array_samples.csv \
+   --hibag_model /path/to/HIBAG_model.RData \
+   --sample_key rna_wgs_key.csv \
+   --outdir <OUTDIR>
+```
+
+Both produce the same combined allele table, so the consensus step and everything after it are unchanged either way. See the [usage documentation](docs/usage.md#snp-array-samplesheet-input-hibag) for the SNP-array samplesheet layout and the HIBAG model requirements.
 
 For more details and further functionality, please refer to the [usage documentation](https://nf-co.re/hlarnaseq/usage)
 and the [parameter documentation](https://nf-co.re/hlarnaseq/parameters).

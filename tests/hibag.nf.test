@@ -1,0 +1,72 @@
+nextflow_pipeline {
+
+    name "Test pipeline - HIBAG SNP-array path"
+    script "../main.nf"
+    tag "pipeline"
+    tag "pipeline_hibag"
+
+    // The HIBAG path replaces HLA-LA as the genotype-side HLA caller, feeding
+    // the same file into HLA_CONSENSUS. Run in stub form, as the default
+    // pipeline test is, so it stays engine-free and fast; the real imputation
+    // is covered by the HIBAG_PREDICT module test.
+    test("-profile test + HIBAG array inputs") {
+
+        options "-stub-run"
+
+        when {
+            params {
+                outdir = "$outputDir"
+                array_samples    = "$projectDir/tests/fixtures/hibag/array_samples.csv"
+                hibag_model      = "$projectDir/tests/fixtures/hibag/ModelList.RData"
+                hibag_match_type = 'RefSNP'
+                hibag_assembly   = 'hg19'
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+
+                // HIBAG ran and produced both its per-dataset outputs...
+                { assert new File("$outputDir/hibag/NA12878_fixture.hibag_calls.tsv").exists() },
+                { assert new File("$outputDir/hibag/NA12878_fixture.hibag_posterior.tsv").exists() },
+                // ...and the combined file in the HLA-LA contract.
+                { assert new File("$outputDir/hibag/HIBAG_combined.tsv").exists() },
+                { assert new File("$outputDir/hibag/HIBAG_combined.tsv").readLines()[0] == 'sample_id\tLocus\tHLA_allele' },
+
+                // HLA-LA did not run: the two are mutually exclusive and
+                // only --array_samples was given.
+                { assert !new File("$outputDir/hlala").exists() },
+
+                // The consensus step consumed the HIBAG file and the rest of
+                // the mandatory chain still completed.
+                { assert new File("$outputDir/hla_consensus/hla_consensus.rna_wgs_hla_consensus.tsv").exists() },
+                { assert new File("$outputDir/hla_consensus/hla_consensus.rna_wgs_rna-hla_with_consensus.tsv").exists() },
+                { assert !new File("$outputDir/hlapm/personalized_ref/out").listFiles().toList().isEmpty() }
+            )
+        }
+    }
+
+    test("reject --wgs_samples and --array_samples together") {
+
+        options "-stub-run"
+
+        when {
+            params {
+                outdir = "$outputDir"
+                wgs_samples     = "$projectDir/tests/fixtures/wgs_samples_stub.csv"
+                array_samples   = "$projectDir/tests/fixtures/hibag/array_samples.csv"
+                hibag_model     = "$projectDir/tests/fixtures/hibag/ModelList.RData"
+                hlala_graph_dir = "$projectDir/tests/fixtures"
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.failed },
+                { assert workflow.stdout.any { it.contains('mutually exclusive') } ||
+                         workflow.errorReport.contains('mutually exclusive') }
+            )
+        }
+    }
+}

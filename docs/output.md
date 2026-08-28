@@ -75,6 +75,24 @@ The short version: the `HLALA_TYPING` module declares each per-sample output dir
 
 Two files published by earlier versions of this pipeline are gone: `<sample_id>/hla.tar.gz` (the `hla/` directory is published unarchived instead) and `<sample_id>/hlala.log` (HLA-LA's stdout is no longer redirected to a file; it is captured in the task's `.command.out` under the work directory).
 
+### HIBAG (SNP-array HLA imputation)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `hibag/`
+  - `HIBAG_combined.tsv`: Combined HIBAG allele calls across all SNP-array datasets, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row). **This is the same format `hlala/HLA-LA_combined.tsv` uses**, so the consensus step consumes either interchangeably.
+  - `<array_sample_id>.hibag_calls.tsv`: The same three columns for one PLINK dataset, before combining.
+  - `<array_sample_id>.hibag_posterior.tsv`: Per-call diagnostics - `sample_id`, `locus`, `allele1`, `allele2`, `prob` (posterior probability), `matching`, `n_model_snps`, `n_matched_snps`. Not consumed by the pipeline; use it to judge call confidence and how much of the model matched your array.
+
+</details>
+
+HIBAG runs only when `--array_samples` is provided, and is mutually exclusive with HLA-LA. It replaces HLA-LA as the genotype-side caller, imputing HLA alleles from SNP-array genotypes rather than typing them from WGS alignments.
+
+Note that `sample_id` comes from the **`.fam` IID column** of each PLINK dataset, not from the samplesheet's `array_sample_id`. See [usage docs](usage.md#warning-a-row-is-one-plink-dataset-not-one-sample).
+
+Allele resolution differs between the two callers - HLA-LA reports G-groups (`A*01:01:01G`), HIBAG reports two fields (`A*01:01`) - but `--hla_consensus_truncate_fields` (default `2`) collapses both to the same resolution before consensus calling, so the two paths are directly comparable downstream.
+
 ### HLA consensus
 
 <details markdown="1">

@@ -163,6 +163,75 @@ process {
 
 Be aware that this reintroduces the multi-gigabyte-per-sample duplication that `'link'` exists to avoid. `'symlink'`/`'rellink'` are cheaper alternatives, but the published results then break as soon as the work directory is cleaned.
 
+## SNP-array samplesheet input (HIBAG)
+
+HIBAG is the alternative to HLA-LA for the genotype-side HLA calls. Instead of typing HLA from WGS alignments, it *imputes* HLA alleles from GWAS SNP genotypes, so its input is microarray data in PLINK binary format:
+
+```bash
+--array_samples '[path to SNP-array samplesheet file]' --hibag_model '[path to a pre-fit HIBAG model .RData]'
+```
+
+**`--array_samples` and `--wgs_samples` are mutually exclusive.** Both fill the same genotype-side input to the consensus step, so the pipeline fails fast if given both rather than silently picking one.
+
+The SNP-array samplesheet must be a comma-separated file with exactly these columns:
+
+```csv title="array_samples.csv"
+array_sample_id,array_bed_path,array_bim_path,array_fam_path
+NA12878_omniexpress,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bed,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bim,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.fam
+```
+
+| Column            | Description                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| `array_sample_id` | Label for the PLINK **dataset**. Mandatory, cannot contain spaces. See the warning below.       |
+| `array_bed_path`  | Path to the PLINK `.bed` genotype file. Mandatory, must end in `.bed`.                          |
+| `array_bim_path`  | Path to the matching `.bim` variant file. Mandatory, must end in `.bim`.                        |
+| `array_fam_path`  | Path to the matching `.fam` sample file. Mandatory, must end in `.fam`.                         |
+
+Relative paths are resolved from the directory containing the samplesheet, the launch directory, or the pipeline project directory, as for the other samplesheets. An [example SNP-array samplesheet](../assets/array_samples.csv) is provided with the pipeline.
+
+### :warning: A row is one PLINK dataset, not one sample
+
+This is the one place where the SNP-array samplesheet behaves differently from the RNA and WGS ones. A PLINK fileset can hold many samples, and HIBAG imputes all of them in a single call, so:
+
+- `array_sample_id` is only a **label** for the dataset. It is used for task tags and output filenames, and nothing else.
+- The sample IDs that reach the consensus step come from the **IID column of the `.fam` file**.
+
+It is therefore the `.fam` IIDs - not `array_sample_id` - that must match the `wgs_sample_id` values in `--sample_key`. If they do not match, the affected individuals simply produce no consensus rows rather than raising an error, so check this first if consensus output looks empty.
+
+### The HIBAG model
+
+`--hibag_model` is **mandatory** whenever `--array_samples` is given, and the pipeline fails fast if it is missing or does not exist.
+
+The file must be an `.RData` holding either a single `hlaAttrBagObj` or a named list of them, one per HLA locus - the shape the published HIBAG per-platform models use. Pick a model built for your array platform and genome assembly; the pipeline never trains one. By default every locus in the model file is predicted; restrict that with `--hibag_loci 'A,B,C'`.
+
+Set `--hibag_assembly` (`hg18`/`hg19`/`hg38`, default `hg19`) to the assembly of your **genotypes**, and make sure the model was built on the same one.
+
+### :warning: If HIBAG reports that no SNPs match
+
+The most common failure is a model whose SNP coordinates do not line up with your array manifest. HIBAG's own error for this is a bare `There is no overlapping of SNPs!`, so the pipeline checks the overlap first and fails with something you can act on:
+
+```text
+HLA-A: none of the model's 266 SNPs match the array data under --match-type 'RefSNP+Position'.
+    SNPs found under each criterion:
+      Position         0 of 266 model SNPs
+      Pos+Allele       0 of 266 model SNPs
+      RefSNP+Position  0 of 266 model SNPs
+      RefSNP           264 of 266 model SNPs
+    Try --match-type with one of: RefSNP.
+```
+
+Set `--hibag_match_type` to whichever criterion the message says will work. The default is the strict `RefSNP+Position`, which is correct when the model and the genotypes were built against the same manifest and assembly. `RefSNP` matches on rsID alone and is the usual fix for a coordinate offset. If *no* criterion matches anything, the model and the data are on different assemblies, or the array does not cover the xMHC.
+
+`--hibag_min_prob` (default `0`, i.e. no filtering) drops calls whose posterior probability falls below the threshold. The default matches the HLA-LA path, which applies no confidence filter either.
+
+### HIBAG dependency
+
+Unlike most steps, `HIBAG_PREDICT` currently has **no `conda`/`container` directive of its own**: it takes the `HIBAG` R package from the ambient environment, which is expected to be the `nf-core` environment described in [`envs/nf-core.yml`](../envs/nf-core.yml) (`bioconductor-hibag`). The module fails with an explicit message if `Rscript` or the package is missing. Moving this step onto the standard nf-core `environment.yml` + container pattern is a planned follow-up.
+
+### Preparing SNP-array test data
+
+`testdata-make/10-prepare-na12878-array-hibag` downloads the NA12878 / GM12878 Illumina HumanOmniExpress-24 v1.0 array data from GEO and converts it to the PLINK genotypes this step consumes. See [`testdata-make/README.md`](../testdata-make/README.md) for what the conversion does and its limitations.
+
 ## RNA/WGS sample key input
 
 `--sample_key` is a required top-level parameter whenever `--rna_samples` is provided. It maps RNA samples to their matched WGS sample (when one exists) for HLA consensus calling:

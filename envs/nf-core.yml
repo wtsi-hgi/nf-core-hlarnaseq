@@ -10,6 +10,11 @@
 # resolved by Nextflow under -profile conda/docker/singularity/apptainer.
 # No openjdk entry is needed here either - that module's own environment
 # pulls in the Java runtime its validator requires.
+#
+# HIBAG_PREDICT is the exception that still relies on this environment: it has
+# no environment.yml/container of its own yet, so bioconductor-hibag below is
+# the only thing that provisions it. Moving that module onto the standard
+# nf-core conda/container pattern is a planned follow-up.
 channels:
   - conda-forge
   - bioconda
@@ -26,3 +31,4 @@ dependencies:
   - r-tibble
   - r-stringr
   - r-purrr
+  - bioconductor-hibag

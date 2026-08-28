@@ -7,6 +7,7 @@ include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_hlarnaseq_pipeline'
 include { HLALA                  } from '../subworkflows/local/hlala'
+include { HIBAG                  } from '../subworkflows/local/hibag'
 include { ARCASHLA                } from '../subworkflows/local/arcashla'
 include { HLA_CONSENSUS          } from '../modules/local/hla_consensus'
 include { HLAPM                  } from '../subworkflows/local/hlapm'
@@ -23,13 +24,21 @@ include { HLAPM_STAR_QUANTIFY    } from '../subworkflows/local/hlapm_star_quanti
 workflow HLARNASEQ {
 
     take:
-    ch_rna_samplesheet // channel: RNA samplesheet read in from --rna_samples
-    ch_wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
-    ch_sample_key      // channel: RNA/WGS sample key read in from --sample_key
+    ch_rna_samplesheet   // channel: RNA samplesheet read in from --rna_samples
+    ch_wgs_samplesheet   // channel: WGS samplesheet read in from --wgs_samples
+    ch_array_samplesheet // channel: SNP-array samplesheet read in from --array_samples
+    ch_sample_key        // channel: RNA/WGS sample key read in from --sample_key
     main:
 
     ch_versions = channel.empty()
+    // Genotype-side HLA calls in the `sample_id/Locus/HLA_allele` contract.
+    // Filled by HLA-LA (from WGS) or by HIBAG (from SNP arrays) - the two are
+    // mutually exclusive - or left as the header-only placeholder when
+    // neither input is given. The name is historical: HLALA_COMBINE defined
+    // this format, and HIBAG_COMBINE reproduces it exactly.
     ch_hlala_combined = channel.empty()
+    ch_hibag_calls = channel.empty()
+    ch_hibag_posterior = channel.empty()
     ch_arcashla_reads = channel.empty()
     ch_arcashla_validation_logs = channel.empty()
     ch_arcashla_genotypes = channel.empty()
@@ -61,6 +70,12 @@ workflow HLARNASEQ {
         HLALA(ch_wgs_samplesheet)
         ch_versions = ch_versions.mix(HLALA.out.versions)
         ch_hlala_combined = HLALA.out.combined_csv
+    } else if (params.array_samples) {
+        HIBAG(ch_array_samplesheet)
+        ch_versions = ch_versions.mix(HIBAG.out.versions)
+        ch_hlala_combined = HIBAG.out.combined_csv
+        ch_hibag_calls = HIBAG.out.calls
+        ch_hibag_posterior = HIBAG.out.posterior
     } else {
         ch_hlala_combined = Channel.fromPath("${projectDir}/assets/NO_WGS_HLALA_COMBINED.tsv")
     }
@@ -144,7 +159,9 @@ workflow HLARNASEQ {
 
     emit:
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
-    hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.tsv) ]
+    hlala_combined = ch_hlala_combined           // channel: [ path(HLA-LA_combined.tsv | HIBAG_combined.tsv) ]
+    hibag_calls    = ch_hibag_calls              // channel: [ val(meta), path(*.hibag_calls.tsv) ]
+    hibag_posterior = ch_hibag_posterior         // channel: [ val(meta), path(*.hibag_posterior.tsv) ]
     arcashla_reads = ch_arcashla_reads           // channel: [ val(meta), [ path(read1), path(read2) ] ]
     arcashla_validation_logs = ch_arcashla_validation_logs // channel: [ val(meta), path(validatefastq.log) ]
     arcashla_genotypes = ch_arcashla_genotypes   // channel: [ val(meta), path(genotype.json) ]

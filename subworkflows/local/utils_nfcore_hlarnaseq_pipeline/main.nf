@@ -34,6 +34,7 @@ workflow PIPELINE_INITIALISATION {
     outdir            //  string: The output directory where the results will be saved
     rna_samples       //  string: Path to RNA samplesheet
     wgs_samples       //  string: Path to WGS samplesheet
+    array_samples     //  string: Path to SNP-array samplesheet
     sample_key        //  string: Path to RNA/WGS sample key
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
@@ -144,6 +145,32 @@ workflow PIPELINE_INITIALISATION {
     }
 
     //
+    // Create channel from SNP-array samplesheet provided through params.array_samples
+    //
+    // A row is one PLINK dataset, not one sample: HIBAG predicts every sample
+    // in the fileset at once, and the sample IDs that reach HLA_CONSENSUS come
+    // from the .fam IID column rather than from array_sample_id.
+    //
+    if (array_samples) {
+        validateArraySamplesheetHeader(array_samples)
+
+        channel
+            .fromList(samplesheetToList(array_samples, "${projectDir}/assets/schema_array_samples.json"))
+            .map {
+                meta, array_bed_path, array_bim_path, array_fam_path ->
+                    return [
+                        meta,
+                        validateArraySamplesheetFile(array_samples, array_bed_path, "array_bed_path"),
+                        validateArraySamplesheetFile(array_samples, array_bim_path, "array_bim_path"),
+                        validateArraySamplesheetFile(array_samples, array_fam_path, "array_fam_path")
+                    ]
+            }
+            .set { ch_array_samplesheet }
+    } else {
+        ch_array_samplesheet = channel.empty()
+    }
+
+    //
     // Create channel from RNA/WGS sample key provided through params.sample_key
     //
     if (sample_key) {
@@ -154,10 +181,11 @@ workflow PIPELINE_INITIALISATION {
     }
 
     emit:
-    rna_samplesheet = ch_rna_samplesheet
-    wgs_samplesheet = ch_wgs_samplesheet
-    sample_key      = ch_sample_key
-    versions        = ch_versions
+    rna_samplesheet   = ch_rna_samplesheet
+    wgs_samplesheet   = ch_wgs_samplesheet
+    array_samplesheet = ch_array_samplesheet
+    sample_key        = ch_sample_key
+    versions          = ch_versions
 }
 
 /*
@@ -216,7 +244,9 @@ workflow PIPELINE_COMPLETION {
 //
 def validateInputParameters() {
     genomeExistsError()
+    genotypeSourceExclusiveError()
     hlalaGraphDirExistsError()
+    hibagModelExistsError()
     hlapmRepoExistsError()
     arcashlaReferenceDirExistsError()
 }
@@ -315,6 +345,51 @@ def validateWgsSamplesheetFile(samplesheet, entry, field_name) {
     return resolved_path
 }
 //
+// Validate SNP-array samplesheet header
+//
+def validateArraySamplesheetHeader(samplesheet) {
+    def expected_header = "array_sample_id,array_bed_path,array_bim_path,array_fam_path"
+    def observed_header = file(samplesheet).readLines().find { line -> line.trim() }?.trim()
+
+    if (observed_header != expected_header) {
+        error("Please check SNP-array samplesheet -> Header must be exactly: ${expected_header}")
+    }
+}
+
+//
+// Validate and resolve SNP-array samplesheet file entries
+//
+def validateArraySamplesheetFile(samplesheet, entry, field_name) {
+    def entry_path = file(entry)
+
+    if (entry_path.isAbsolute() && entry_path.exists()) {
+        return entry_path
+    }
+
+    // nf-schema resolves every `format: file-path` samplesheet value against
+    // the launch directory, so a relative entry arrives here already absolute
+    // and wrong whenever the pipeline is launched from outside the repo (which
+    // is what nf-test does). Undo that before searching, exactly as
+    // validateRnaSamplesheetFile does.
+    def launch_path = file(workflow.launchDir)
+    def relative_entry = entry_path.isAbsolute() && entry_path.startsWith(launch_path) ? launch_path.relativize(entry_path) : entry_path
+    def candidate_paths = [
+        file(samplesheet).parent.resolve(relative_entry).normalize(),
+        launch_path.resolve(relative_entry).normalize(),
+        file(projectDir).resolve(relative_entry).normalize()
+    ]
+
+    def resolved_path = candidate_paths.find { candidate -> candidate.exists() }
+
+    if (!resolved_path) {
+        def searched_paths = candidate_paths.collect { candidate -> candidate.toString() }.unique().join(", ")
+        error("Please check SNP-array samplesheet -> ${field_name} does not exist: ${entry}. Searched: ${searched_paths}")
+    }
+
+    return resolved_path
+}
+
+//
 // Validate RNA/WGS sample key header
 //
 def validateSampleKeyHeader(sample_key) {
@@ -349,6 +424,36 @@ def genomeExistsError() {
             "  ${params.genomes.keySet().join(", ")}\n" +
             "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
         error(error_string)
+    }
+}
+
+//
+// Exit pipeline if both genotype-side HLA callers are requested at once
+//
+// HLA-LA (from WGS) and HIBAG (from SNP arrays) both fill the same
+// `sample_id/Locus/HLA_allele` channel feeding HLA_CONSENSUS. Running both
+// would mean silently choosing one, so require the user to choose instead.
+//
+def genotypeSourceExclusiveError() {
+    if (params.wgs_samples && params.array_samples) {
+        error(
+            "--wgs_samples and --array_samples are mutually exclusive.\n" +
+            "  --wgs_samples calls genotype-side HLA alleles from WGS with HLA-LA.\n" +
+            "  --array_samples calls them from SNP-array data with HIBAG.\n" +
+            "  Both feed the same consensus input, so please provide exactly one."
+        )
+    }
+}
+
+//
+// Exit pipeline if SNP-array inputs are provided without a usable HIBAG model
+//
+def hibagModelExistsError() {
+    if (params.array_samples && !params.hibag_model) {
+        error("Please provide --hibag_model when using --array_samples so HIBAG can find its pre-fit model file.")
+    }
+    if (params.hibag_model && !file(params.hibag_model).exists()) {
+        error("Please check --hibag_model -> the HIBAG model file does not exist: ${params.hibag_model}")
     }
 }
 
