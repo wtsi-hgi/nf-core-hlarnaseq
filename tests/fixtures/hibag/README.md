@@ -18,12 +18,23 @@ loaded at runtime by anything other than the tests and `-profile test_hibag`.
 for locus `A` — 100 classifiers, 266 SNPs, 14 HLA alleles, `assembly = "hg19"`,
 34 KB.
 
-To regenerate:
+To regenerate. `bioconductor-hibag` is deliberately not in `envs/nf-core.yml`
+any more (`HIBAG_PREDICT` provisions it from
+`modules/local/hibag/predict/environment.yml`), so take the package from the
+module's own container rather than the launcher environment:
 
 ```bash
-cp "$(Rscript -e 'cat(system.file("extdata","ModelList.RData",package="HIBAG"))')" \
-   tests/fixtures/hibag/ModelList.RData
+singularity exec \
+  https://depot.galaxyproject.org/singularity/bioconductor-hibag:1.42.0--r44he5774e6_1 \
+  Rscript -e 'cat(system.file("extdata","ModelList.RData",package="HIBAG"))'
+# then cp that path (from inside the container) to
+# tests/fixtures/hibag/ModelList.RData
 ```
+
+The vendored copy above came from HIBAG 1.46.0, before the module pinned
+1.42.0. It has not been re-vendored because the two are byte-identical: the
+file shipped inside the 1.42.0 container has the same md5,
+`604fa0e2ccaa1424b89013b60857e982`.
 
 ### Why the tests set `hibag_match_type = 'RefSNP'`
 

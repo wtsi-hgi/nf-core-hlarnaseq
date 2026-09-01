@@ -39,16 +39,21 @@ The other 2 are consumed automatically by name and never need manual activation.
   `conda env export --from-history` and hand-trimmed to the packages each
   step actually needs; version floors/pins mirror `docs/usage.md`, which
   remains the source of truth for per-parameter detail.
-- `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`, `HLALA_TYPING`, and STAR
-  (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions to the
-  "operator-prepared Conda environment" model above: each comes from its own
-  module-owned `conda`/`environment.yml` and `container` directive, resolved
+- `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`, `HLALA_TYPING`,
+  `HIBAG_PREDICT`, and STAR (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions
+  to the "operator-prepared Conda environment" model above: each comes from its
+  own module-owned `conda`/`environment.yml` and `container` directive, resolved
   automatically via `-profile conda`/`singularity`/`docker`, not from any
   environment in the table above. See
   [usage docs](usage.md#rna-samplesheet-input),
   [usage docs](usage.md#arcashla-genotyping-environment),
-  [usage docs](usage.md#wgs-samplesheet-input), and
+  [usage docs](usage.md#wgs-samplesheet-input),
+  [usage docs](usage.md#hibag-dependency), and
   [usage docs](usage.md#hlapm-star-index) for details.
+  `HIBAG_PREDICT` is the most recent to move: `bioconductor-hibag` used to be
+  listed in `envs/nf-core.yml` and is no longer, so the SNP-array path now
+  needs one of those profiles rather than a package in the `nf-core`
+  environment.
   Note that `HLALA_TYPING`'s prepared HLA-LA graph (`--hlala_graph_dir`) is
   still an operator-prepared input, exactly like `ARCASHLA_GENOTYPE`'s
   `--arcashla_reference_dir`; only the tool itself is module-provisioned.

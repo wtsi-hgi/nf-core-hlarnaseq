@@ -246,7 +246,11 @@ They carry accurate hg19 positions but 2012-era rsIDs, many of which have since 
 
 ### HIBAG dependency
 
-Unlike most steps, `HIBAG_PREDICT` currently has **no `conda`/`container` directive of its own**: it takes the `HIBAG` R package from the ambient environment, which is expected to be the `nf-core` environment described in [`envs/nf-core.yml`](../envs/nf-core.yml) (`bioconductor-hibag`). The module fails with an explicit message if `Rscript` or the package is missing. Moving this step onto the standard nf-core `environment.yml` + container pattern is a planned follow-up.
+`HIBAG_PREDICT` follows the standard nf-core pattern: its dependency is declared once in [`modules/local/hibag/predict/environment.yml`](../modules/local/hibag/predict/environment.yml) (`bioconda::bioconductor-hibag=1.42.0`), which feeds both the module's `conda` directive and a matching pinned Biocontainers/Galaxy-depot `container` directive. Run the SNP-array path with one of `-profile conda`, `-profile docker`, `-profile singularity` or `-profile apptainer` and Nextflow provisions HIBAG for you.
+
+The package is deliberately **not** listed in [`envs/nf-core.yml`](../envs/nf-core.yml), so nothing here depends on `HIBAG` being installed in the environment you launch Nextflow from. Running with none of those profiles fails at this step with an explicit message naming the profiles to use, rather than silently imputing with whatever version happens to be on the host.
+
+The pin is 1.42.0 rather than the newer 1.46.0 because 1.42.0 is the most recent release for which the Galaxy depot publishes a Singularity image, so a single version covers all four profiles.
 
 ### Preparing SNP-array test data
 

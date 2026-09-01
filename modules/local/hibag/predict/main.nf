@@ -2,11 +2,13 @@ process HIBAG_PREDICT {
     tag "$meta.id"
     label 'process_single'
 
-    // Deliberately no `conda`/`container` directive in this iteration: HIBAG
-    // is taken from the ambient environment, as HLAPM_* modules do today. The
-    // requirement is recorded in envs/nf-core.yml. Moving this module onto the
-    // standard nf-core environment.yml + container pattern is a planned
-    // follow-up iteration.
+    conda "${moduleDir}/environment.yml"
+    // Standard nf-core pattern: one environment.yml feeds the `conda`
+    // directive, paired with the matching pinned Biocontainers image built
+    // from that same Bioconda recipe.
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        'https://depot.galaxyproject.org/singularity/bioconductor-hibag:1.42.0--r44he5774e6_1':
+        'quay.io/biocontainers/bioconductor-hibag:1.42.0--r44he5774e6_1' }"
 
     publishDir "${params.outdir}/hibag",
         mode: params.publish_dir_mode,
@@ -25,12 +27,17 @@ process HIBAG_PREDICT {
     def prefix = task.ext.prefix ?: "${meta.id}"
     def loci_arg = params.hibag_loci ? "--loci '${params.hibag_loci}'" : ""
     """
+    # The conda/container directives above provision R and HIBAG. Neither
+    # applies when the pipeline is run with no -profile conda/docker/
+    # singularity/apptainer at all, in which case the task falls back to the
+    # host PATH - fail with an actionable message rather than a bare
+    # "command not found", as ARCASHLA_VALIDATE_FASTQ does.
     command -v Rscript >/dev/null 2>&1 || {
-        echo "ERROR: Rscript is not available in the active environment." >&2
+        echo "ERROR: Rscript is not available. Run the pipeline with -profile conda, docker, singularity, or apptainer so this module gets the environment declared in modules/local/hibag/predict/environment.yml." >&2
         exit 127
     }
     Rscript -e 'if (!requireNamespace("HIBAG", quietly=TRUE)) { quit(status=1) }' || {
-        echo "ERROR: the R package HIBAG is not installed in the active environment. Install bioconductor-hibag (see envs/nf-core.yml)." >&2
+        echo "ERROR: the R package HIBAG is not available. Run the pipeline with -profile conda, docker, singularity, or apptainer so this module gets the environment declared in modules/local/hibag/predict/environment.yml." >&2
         exit 127
     }
 
