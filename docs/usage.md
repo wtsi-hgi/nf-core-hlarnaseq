@@ -63,6 +63,8 @@ scripts/build_arcashla_reference.sh /path/to/arcashla_reference   # build the re
 --arcashla_reference_dir /path/to/arcashla_reference
 ```
 
+The build needs roughly **15 GB of free space** and network access to `github.com`. It runs under Docker if that image is loaded, otherwise Singularity/Apptainer against the local `.sif`; `RUNTIME=docker|singularity|apptainer` forces one. Under Singularity/Apptainer all of that space is used on the output directory's own filesystem - a `.sif` is read-only at execution time, so the IMGT/HLA checkout cannot live inside the image the way it does in a Docker container's writable layer, and the script instead mounts a writable scratch directory over the image's arcasHLA `dat/` directory. That scratch directory defaults to a temporary `<output-dir>.build.XXXXXX` sibling, removed when the script exits; set `DAT_WORK_DIR` to put it on a different (larger) filesystem, in which case it is left in place. The free-space check runs before the download and can be adjusted with `REQUIRED_GB`. See `scripts/build_arcashla_reference.sh --help` for all override variables.
+
 Under `-profile docker`/`-profile singularity`/`-profile apptainer`, `ARCASHLA_GENOTYPE` uses a container image built from `modules/local/arcashla/genotype/Dockerfile` (just the pinned packages - no reference baked in, for the same reason it isn't built automatically above). Build it once before running with a container profile:
 
 ```bash
@@ -165,7 +167,7 @@ Be aware that this reintroduces the multi-gigabyte-per-sample duplication that `
 
 ## SNP-array samplesheet input (HIBAG)
 
-HIBAG is the alternative to HLA-LA for the genotype-side HLA calls. Instead of typing HLA from WGS alignments, it *imputes* HLA alleles from GWAS SNP genotypes, so its input is microarray data in PLINK binary format:
+HIBAG is the alternative to HLA-LA for the genotype-side HLA calls. Instead of typing HLA from WGS alignments, it _imputes_ HLA alleles from GWAS SNP genotypes, so its input is microarray data in PLINK binary format:
 
 ```bash
 --array_samples '[path to SNP-array samplesheet file]' --hibag_model '[path to a pre-fit HIBAG model .RData]'
@@ -180,12 +182,12 @@ array_sample_id,array_bed_path,array_bim_path,array_fam_path
 NA12878_omniexpress,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bed,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bim,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.fam
 ```
 
-| Column            | Description                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------- |
-| `array_sample_id` | Label for the PLINK **dataset**. Mandatory, cannot contain spaces. See the warning below.       |
-| `array_bed_path`  | Path to the PLINK `.bed` genotype file. Mandatory, must end in `.bed`.                          |
-| `array_bim_path`  | Path to the matching `.bim` variant file. Mandatory, must end in `.bim`.                        |
-| `array_fam_path`  | Path to the matching `.fam` sample file. Mandatory, must end in `.fam`.                         |
+| Column            | Description                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `array_sample_id` | Label for the PLINK **dataset**. Mandatory, cannot contain spaces. See the warning below. |
+| `array_bed_path`  | Path to the PLINK `.bed` genotype file. Mandatory, must end in `.bed`.                    |
+| `array_bim_path`  | Path to the matching `.bim` variant file. Mandatory, must end in `.bim`.                  |
+| `array_fam_path`  | Path to the matching `.fam` sample file. Mandatory, must end in `.fam`.                   |
 
 Relative paths are resolved from the directory containing the samplesheet, the launch directory, or the pipeline project directory, as for the other samplesheets. An [example SNP-array samplesheet](../assets/array_samples.csv) is provided with the pipeline.
 
@@ -220,7 +222,7 @@ HLA-A: none of the model's 266 SNPs match the array data under --match-type 'Ref
     Try --match-type with one of: RefSNP.
 ```
 
-Set `--hibag_match_type` to whichever criterion the message says will work. The default is the strict `RefSNP+Position`, which is correct when the model and the genotypes were built against the same manifest and assembly. `RefSNP` matches on rsID alone and is the usual fix for a coordinate offset. If *no* criterion matches anything, the model and the data are on different assemblies, or the array does not cover the xMHC.
+Set `--hibag_match_type` to whichever criterion the message says will work. The default is the strict `RefSNP+Position`, which is correct when the model and the genotypes were built against the same manifest and assembly. `RefSNP` matches on rsID alone and is the usual fix for a coordinate offset. If _no_ criterion matches anything, the model and the data are on different assemblies, or the array does not cover the xMHC.
 
 `--hibag_min_prob` (default `0`, i.e. no filtering) drops calls whose posterior probability falls below the threshold. The default matches the HLA-LA path, which applies no confidence filter either.
 

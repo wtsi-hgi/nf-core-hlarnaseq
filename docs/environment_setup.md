@@ -62,8 +62,9 @@ The other 2 are consumed automatically by name and never need manual activation.
   pinned container image the pipeline itself runs. Neither is created by the
   pipeline:
   - `scripts/build_arcashla_reference.sh <dir>` &rarr;
-    `--arcashla_reference_dir` (run `scripts/build_image_arcashla.sh` first;
-    that image is built locally). See
+    `--arcashla_reference_dir` (~15 GB of scratch on `<dir>`'s own filesystem
+    under Singularity/Apptainer, plus network access to `github.com`; run
+    `scripts/build_image_arcashla.sh` first, that image is built locally). See
     [usage docs](usage.md#arcashla-genotyping-environment).
   - `scripts/build_reference_hlala.sh <dir>` &rarr; `--hlala_graph_dir`
     (~2.25 GB download, ~29 GB on disk, a few hours, up to 40 GB of RAM; no
