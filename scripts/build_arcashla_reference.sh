@@ -20,13 +20,22 @@ separate .zip downloads instead of being checked into git, so a plain clone
 of the current repository state no longer works with this pinned arcasHLA
 version at all (it fails with a confusing FileNotFoundError, not a clear
 error). Instead, this script clones IMGTHLA itself and checks out a pinned
-historical commit - IMGT/HLA version 3.46.0, the newest version arcasHLA
-0.6.0 itself has a built-in commit mapping for (see IMGTHLA_COMMIT below) -
-which predates that restructuring, then runs `arcasHLA reference --rebuild`
-against it (skipping arcasHLA's own now-broken fetch logic entirely). This
-also has the side benefit of pinning the exact HLA database version for
-reproducibility, rather than depending on whatever the upstream default
-branch happens to contain when this script is run.
+historical commit - IMGT/HLA version 3.52.0, which predates that
+restructuring (see IMGTHLA_COMMIT below) - then runs `arcasHLA reference
+--rebuild` against it (skipping arcasHLA's own now-broken fetch logic
+entirely). This also has the side benefit of pinning the exact HLA database
+version for reproducibility, rather than depending on whatever the upstream
+default branch happens to contain when this script is run.
+
+Why 3.52.0 specifically: it is the IPD-IMGT/HLA version HLApm uses, so the
+arcasHLA genotype calls this reference produces and the personalized
+reference HLApm builds downstream come from the same allele nomenclature.
+Note that this is NOT reachable through `arcasHLA reference --version`:
+arcasHLA 0.6.0's built-in version-to-commit mapping (dat/info/
+parameters.json) stops at 3.46.0. That mapping is precisely what this script
+does not rely on - it checks the commit out itself, which is what makes any
+pre-3.56.0 version available, and is equivalent to what `arcasHLA reference
+--commit <ref>` does before building.
 
 Run scripts/build_image_arcashla.sh first if you haven't already - this
 script needs at least one of the images it builds to already exist.
@@ -45,7 +54,10 @@ Docker's own storage instead, so the check does not apply to that path.
 Environment:
   IMAGE_TAG        Docker image to run, if present. Default: quay.io/hlarnaseq/arcashla-genotype:0.6.0
   SIF_PATH         Singularity image to run instead, if IMAGE_TAG isn't loaded in Docker. Default: modules/local/arcashla/genotype/arcashla-genotype.sif
-  IMGTHLA_COMMIT   IMGT/HLA commit to check out. Default: 8d77b3dd93959663d58ae5b626289d0746edd0e7 (version 3.46.0)
+  IMGTHLA_COMMIT   IMGT/HLA commit to check out. Default: 38398a75e9762ff070d8e9bd714d074332646cd7
+                   (version 3.52.0, tag v3.52.0-alpha). Pinned by commit SHA rather
+                   than by tag name so the default cannot shift if upstream moves
+                   the tag; any git ref works if you override it.
   RUNTIME          Force a container runtime: docker, singularity, or apptainer.
                    Default: auto-detect, Docker first (if IMAGE_TAG is loaded),
                    then singularity/apptainer (if SIF_PATH exists).
@@ -66,7 +78,10 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_TAG="${IMAGE_TAG:-quay.io/hlarnaseq/arcashla-genotype:0.6.0}"
 SIF_PATH="${SIF_PATH:-${ROOT_DIR}/modules/local/arcashla/genotype/arcashla-genotype.sif}"
-IMGTHLA_COMMIT="${IMGTHLA_COMMIT:-8d77b3dd93959663d58ae5b626289d0746edd0e7}"
+# IMGT/HLA 3.52.0 (tag v3.52.0-alpha) - the version HLApm uses; see usage()
+# above for why it is pinned by SHA and checked out here rather than passed to
+# `arcasHLA reference --version`.
+IMGTHLA_COMMIT="${IMGTHLA_COMMIT:-38398a75e9762ff070d8e9bd714d074332646cd7}"
 REQUIRED_GB="${REQUIRED_GB:-15}"
 
 mkdir -p "$1"
