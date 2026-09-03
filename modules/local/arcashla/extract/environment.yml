@@ -1,0 +1,31 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: ARCASHLA_EXTRACT tool environment.
+#
+# This module slices the MHC region out of each RNA sample's BAM with
+# `samtools view --fetch-pairs | samtools sort -n | samtools fastq`. Until now
+# it was the only module in this pipeline with no `conda`/`container`
+# directive, so it silently used whatever `samtools` happened to be on the
+# host PATH - which is exactly the reproducibility hole this file closes.
+#
+# The pin is deliberately identical to the vendored nf-core SAMTOOLS_SORT
+# module (modules/nf-core/samtools/sort/environment.yml), and main.nf points at
+# the same container image that module uses. Two consequences, both wanted:
+# the pipeline can never end up running two different samtools versions across
+# its two samtools call sites, and `-profile docker/singularity` pulls no image
+# that the pipeline was not already pulling.
+#
+# htslib is listed explicitly, as upstream does: samtools links against it, and
+# naming it keeps the resolved pair reproducible rather than leaving htslib to
+# whatever the solver picks.
+#
+# No `procps-ng` entry is needed: the container image already ships `ps`, which
+# Nextflow runs inside every container to collect task trace metrics.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # renovate: datasource=conda depName=bioconda/htslib
+  - bioconda::htslib=1.24
+  # renovate: datasource=conda depName=bioconda/samtools
+  - bioconda::samtools=1.24

@@ -39,9 +39,10 @@ The other 2 are consumed automatically by name and never need manual activation.
   `conda env export --from-history` and hand-trimmed to the packages each
   step actually needs; version floors/pins mirror `docs/usage.md`, which
   remains the source of truth for per-parameter detail.
-- `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`, `HLALA_TYPING`,
-  `HIBAG_PREDICT`, and STAR (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions
-  to the "operator-prepared Conda environment" model above: each comes from its
+- `ARCASHLA_EXTRACT`, `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`,
+  `HLALA_TYPING`, `HIBAG_PREDICT`, and STAR
+  (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions to the
+  "operator-prepared Conda environment" model above: each comes from its
   own module-owned `conda`/`environment.yml` and `container` directive, resolved
   automatically via `-profile conda`/`singularity`/`docker`, not from any
   environment in the table above. See
@@ -50,7 +51,15 @@ The other 2 are consumed automatically by name and never need manual activation.
   [usage docs](usage.md#wgs-samplesheet-input),
   [usage docs](usage.md#hibag-dependency), and
   [usage docs](usage.md#hlapm-star-index) for details.
-  `HIBAG_PREDICT` is the most recent to move: `bioconductor-hibag` used to be
+  `ARCASHLA_EXTRACT` is the most recent to move, and was the last module in the
+  pipeline calling a tool off the host `PATH` with no directives of its own: it
+  now provisions `samtools` from its own `environment.yml`/`container`
+  (`bioconda::samtools=1.24`, the same pin and image the vendored nf-core
+  `SAMTOOLS_SORT` module uses, so the two cannot drift apart). `samtools`
+  remains listed in `envs/nf-core.yml`, but only because the `testdata-make/`
+  fixture-building scripts call it directly - no pipeline step needs it there
+  any more.
+  `HIBAG_PREDICT` moved just before it: `bioconductor-hibag` used to be
   listed in `envs/nf-core.yml` and is no longer, so the SNP-array path now
   needs one of those profiles rather than a package in the `nf-core`
   environment.

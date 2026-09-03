@@ -1,8 +1,16 @@
 # nf-core/hlarnaseq: main runtime environment.
-# The environment Nextflow itself runs in - also provides samtools and the
-# Python/R interpreters used by bin/call_hla_consensus.py,
-# bin/consensus_to_hlapm.py, and bin/combine_arcashla_genotypes.R.
+# The environment Nextflow itself runs in - also provides the Python/R
+# interpreters used by bin/call_hla_consensus.py, bin/consensus_to_hlapm.py,
+# and bin/combine_arcashla_genotypes.R.
 # See docs/environment_setup.md.
+#
+# samtools is still listed below, but NO pipeline process depends on it any
+# more: ARCASHLA_EXTRACT - the only module that called samtools off this
+# environment's PATH - now provisions it from its own environment.yml /
+# container directive (bioconda::samtools=1.24), the same pin the vendored
+# nf-core SAMTOOLS_SORT module uses. The entry is retained solely because the
+# testdata-make/ fixture-building scripts invoke samtools directly (see
+# testdata-make/README.md); it can be dropped if those ever stop needing it.
 #
 # ARCASHLA_VALIDATE_FASTQ's validator is NOT listed here and no longer needs
 # to be installed by hand: it now comes from that module's own

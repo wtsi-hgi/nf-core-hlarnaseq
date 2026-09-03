@@ -368,7 +368,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools to be available in the active Conda environment; read-pair validation and arcasHLA genotyping provision their own tool environment/container automatically, as described above.
+MHC extraction (samtools), read-pair validation, and arcasHLA genotyping each provision their own tools: every one of those steps declares its own `environment.yml`/`conda` directive and a matching pinned `container`, resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. In particular, samtools no longer has to be installed by hand in the active Conda environment; running with none of those profiles fails with an explicit message naming the missing tool. Other steps — notably the HLApm R/Python steps — still expect their tools in an operator-prepared environment, as described above.
 
 > [!NOTE]
 > `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.
