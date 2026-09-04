@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: HLAPM_BUILD_REF tool environment.
+#
+# This is the R stack HLApm's bulk personalized-reference path needs, and it
+# replaces the previously operator-prepared `hlapm` Conda environment
+# (envs/hlapm.yml, now removed). One file backs both the `conda` and
+# `container` directives in main.nf (see Dockerfile).
+#
+# The package set is exactly what the five HLApm scripts
+# bin/hlapm_build_personalized_ref.R source()s actually load - all six R
+# libraries are declared at the top of HLApm's own scripts/load_ref.R.
+# Rsamtools and reshape2 are deliberately absent: they are used only by
+# scripts/bulk/functions_mapping.R and scripts/bulk/functions_anno.R, which
+# this path never sources (STAR mapping is done by nf-core STAR modules, not
+# by HLApm).
+#
+# Versions are pinned to those of the working `hlapm` environment this
+# replaces, so the container reproduces the behaviour already validated in
+# this pipeline rather than whatever solves latest.
+#
+# bedtools is carried over from envs/hlapm.yml for parity. No HLApm script on
+# the reference-building path shells out to it, but it was part of the
+# environment those outputs were produced with; keeping it costs little and
+# avoids a behaviour change hidden inside a packaging change.
+#
+# git serves two purposes here: the Dockerfile uses it to clone HLApm at the
+# pinned commit while building the image, and main.nf falls back to
+# `git rev-parse HEAD` for versions.yml when a --hlapm_repo checkout is used
+# instead of the baked-in copy (which carries a plain HLApm.version file).
+# Minimal container base images do not ship it.
+#
+# procps-ng provides `ps`: Nextflow's task wrapper runs it inside every
+# container to collect CPU/memory trace metrics, and fails the whole task
+# ("Command 'ps' required by nextflow to collect task metrics cannot be
+# found") if it is missing - the mambaorg/micromamba base image does not ship
+# it. Not needed for -profile conda (a regular Linux host always has `ps`),
+# only for the container image.
+#
+# NOTE: this environment provides HLApm's *dependencies*, never HLApm itself.
+# HLApm is an unpackaged git repository, so it cannot come from Conda: the
+# container bakes it in (Dockerfile), and -profile conda requires the
+# operator to pass a checkout with --hlapm_repo. See docs/usage.md.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - conda-forge::r-base=4.5.3
+  - conda-forge::r-data.table=1.18.4
+  - conda-forge::r-dplyr=1.2.1
+  - conda-forge::r-seqinr=4.2_44
+  - conda-forge::r-stringr=1.6.0
+  - bioconda::bioconductor-biostrings=2.78.0
+  - bioconda::bioconductor-decipher=3.6.0
+  - bioconda::bioconductor-rtracklayer=1.70.1
+  - bioconda::bedtools=2.31.1
+  - conda-forge::git
+  - conda-forge::procps-ng

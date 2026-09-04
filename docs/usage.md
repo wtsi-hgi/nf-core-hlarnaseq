@@ -297,23 +297,31 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 `HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided, regardless of whether `--wgs_samples` is also provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
 
-`--hlapm_repo` is **mandatory** whenever `--rna_samples` is provided (mirroring the existing `--hlala_graph_dir` requirement above), independent of `--wgs_samples`: the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
-
-```bash
---hlapm_repo '[path to a local HLApm checkout]'
-```
-
-`--hlapm_repo` must point to a local, pre-cloned checkout of [davenportlab/HLApm](https://github.com/davenportlab/HLApm) (including its bundled `data/references/` files). The pipeline never clones or fetches HLApm at runtime; the checkout must already exist at this path before the pipeline runs.
-
 `--hlapm_allowed_loci` (default `A,B,C,DRB1,DQA1,DQB1,DPA1,DPB1,DOA,DOB,G,E,F`) is a comma-separated allow-list of HLA loci (without the `HLA-` prefix) to include when building the HLApm input. `HLA_CONSENSUS` output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs; no separate audit/log file is written for excluded loci. This default is restricted to the loci HLApm's own per-allele locus regex can reliably parse — passing other loci through can crash the underlying R script.
 
-### HLApm Conda environment
+### HLApm container
 
-Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the HLA-LA section above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+`HLAPM_BUILD_REF` follows the standard nf-core pattern for its R dependencies: they are declared once in [`modules/local/hlapm/build_ref/environment.yml`](../modules/local/hlapm/build_ref/environment.yml) (`r-base`, `data.table`, `dplyr`, `stringr`, `seqinr`, `Biostrings`, `rtracklayer`, `DECIPHER`, `bedtools`), which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm` Conda environment is gone; nothing needs to be created by hand for the R side.
 
-- R >= 4.1.0
-- CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
-- Bioconductor packages `Biostrings`, `rtracklayer`, `DECIPHER`
+HLApm itself is different. It is an unpackaged lab git repository rather than a Conda package, so it cannot be installed from `environment.yml` and reaches the module one of two ways:
+
+- **Container profiles** (`-profile docker`/`singularity`/`apptainer`) — the image bakes in HLApm at pinned commit `38faa6087bbd827ccab969d947f8df101e95d688`, including its bundled `data/references/` files. Build it once before running:
+
+  ```bash
+  scripts/build_image_hlapm.sh
+  ```
+
+  This builds and tags the Docker image as `quay.io/hlarnaseq/hlapm-build-ref:38faa60`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed, and converts that same image into a local `modules/local/hlapm/build_ref/hlapm-build-ref.sif` (when `singularity`/`apptainer` is available) for `-profile singularity`/`apptainer`, for the same reason described for arcasHLA above. The build needs network access to `github.com` (for the HLApm clone) and to the Conda channels. Override the baked-in HLApm version with `HLAPM_COMMIT=<sha>` — see `scripts/build_image_hlapm.sh --help`.
+
+- **`-profile conda`, or no profile at all** — `--hlapm_repo` is **mandatory**, and the pipeline fails fast at launch with a clear error if it is missing or does not exist, rather than failing partway through the run:
+
+  ```bash
+  --hlapm_repo '[path to a local HLApm checkout]'
+  ```
+
+  It must point to a local, pre-cloned checkout of [davenportlab/HLApm](https://github.com/davenportlab/HLApm), including its bundled `data/references/` files. The pipeline never clones or fetches HLApm at runtime; the checkout must already exist at this path before the pipeline runs.
+
+Under a container profile `--hlapm_repo` remains available but **optional**: passing it overrides the baked-in checkout with your own (e.g. a patched or newer HLApm) without rebuilding the image. The override is staged into the task as an input, so it is mounted into the container automatically — no manual bind-mount options are needed. Either way, `versions.yml` reports which HLApm commit was actually used: the pinned commit from the image, or the override checkout's `git rev-parse HEAD`.
 
 ### HLApm STAR index
 
@@ -347,12 +355,12 @@ Per-allele-level read counts, a cross-sample combined gene-count table, and comp
 
 #### `hlapm-quantify` Conda environment
 
-Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `hlapm`/HLA-LA sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the HLA-LA section above: the pipeline does not create it or install packages into it at any point. It is the last such environment in the pipeline - `HLAPM_BUILD_REF` no longer uses one (see [HLApm container](#hlapm-container) above). Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
 
 - Python 2
 - `pybam` (`pip install https://github.com/JohnLonginotto/pybam/zipball/master`)
 - `intervaltree` (PyPI)
-- R (>= 4.0, matching the `hlapm` env's floor)
+- R (>= 4.0)
 - CRAN packages `dplyr`, `tidyr`
 
 For example:

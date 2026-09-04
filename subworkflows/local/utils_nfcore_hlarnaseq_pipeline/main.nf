@@ -470,14 +470,23 @@ def hlalaGraphDirExistsError() {
     }
 }
 //
-// Exit pipeline if RNA/sample-key inputs are provided without a prepared HLApm checkout
+// Exit pipeline if RNA/sample-key inputs are provided without any source of HLApm
+//
+// HLApm is an unpackaged git repository, so it can only reach HLAPM_BUILD_REF
+// two ways: baked into the module's container image (built by
+// scripts/build_image_hlapm.sh), or as a checkout passed with --hlapm_repo.
+// The module's environment.yml provides HLApm's R dependencies but cannot
+// provide HLApm itself, so without a container engine --hlapm_repo is still
+// mandatory; with one it is an optional override of the baked-in copy.
+// workflow.containerEngine is null under -profile conda and under no profile
+// at all, which is exactly the set of runs that need a host checkout.
 //
 def hlapmRepoExistsError() {
-    if (params.rna_samples && params.sample_key && !params.hlapm_repo) {
-        error("Please provide --hlapm_repo when using --rna_samples and --sample_key so HLApm can find its prepared repository checkout.")
+    if (params.rna_samples && params.sample_key && !params.hlapm_repo && !workflow.containerEngine) {
+        error("Please provide --hlapm_repo when using --rna_samples and --sample_key without a container profile, so HLApm can find its prepared repository checkout. Alternatively run with -profile docker, singularity, or apptainer, whose image bakes HLApm in (build it once with scripts/build_image_hlapm.sh).")
     }
 
-    if (params.rna_samples && params.sample_key && !file(params.hlapm_repo).exists()) {
+    if (params.rna_samples && params.sample_key && params.hlapm_repo && !file(params.hlapm_repo).exists()) {
         error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
     }
 }

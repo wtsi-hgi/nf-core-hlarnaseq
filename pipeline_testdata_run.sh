@@ -91,9 +91,9 @@ EOF
     exit 1
 fi
 
-if [ ! -d "$HLAPM_DIR" ]; then
-    git clone https://github.com/davenportlab/HLApm.git "$HLAPM_DIR"
-fi
+#if [ ! -d "$HLAPM_DIR" ]; then
+#    git clone https://github.com/davenportlab/HLApm.git "$HLAPM_DIR"
+#fi
 
 nextflow -log "${NEXTFLOW_LOG}" \
     run . \
@@ -107,9 +107,14 @@ nextflow -log "${NEXTFLOW_LOG}" \
     --hibag_model "${HIBAG_MODEL}" \
     --hibag_match_type "${HIBAG_MATCH_TYPE}" \
     --sample_key "$RNA_WGS_KEY" \
-    --hlapm_repo "$HLAPM_DIR" \
     --outdir "${OUTDIR}" \
     "$@"
+
+# External HLApm repo is required only with Conda profile
+# Container has the utility baked inside
+    --hlapm_repo "$HLAPM_DIR" \
+
+
 
 # Genotype-side HLA calls come from HIBAG above. HLA-LA is the alternative:
 # it takes a long time to complete, so it is disabled here.

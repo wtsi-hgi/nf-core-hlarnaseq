@@ -4,7 +4,7 @@ At this early development stage the pipeline assumes every tool it invokes
 is already available in an operator-prepared Conda environment - there is no container packaging yet.
 (Except of the tools already available as containers form upstream NF-Core).
 Several bundled tools have conflicting or legacy dependencies (Python 2, old R, old kallisto),
-so the pipeline is split across **3 separate environments**.
+so the pipeline is split across **2 separate environments**.
 Steps invoke the non-main environments by name via `conda run -n <env>`, so the exact names below matter.
 
 Ready-to-use environment files are provided under [`envs/`](../envs/).
@@ -18,7 +18,6 @@ conda env create -f envs/<name>.yml
 | Environment      | File                                                    | Used by                                                               | Needed for |
 | ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
 | `nf-core`        | [`envs/nf-core.yml`](../envs/nf-core.yml)               | Nextflow itself; `HLA_CONSENSUS`, arcasHLA-combine, HLApm-input steps | Always     |
-| `hlapm`          | [`envs/hlapm.yml`](../envs/hlapm.yml)                   | `HLAPM_BUILD_REF`                                                     | Always     |
 | `hlapm-quantify` | [`envs/hlapm-quantify.yml`](../envs/hlapm-quantify.yml) | `HLAPM_QUANTIFY_READS`, `HLAPM_SUMMARIZE_READCOUNTS`                  | Always     |
 
 Activate `nf-core` to launch the pipeline itself.
@@ -27,11 +26,11 @@ Activate `nf-core` to launch the pipeline itself.
 conda activate nf-core
 ```
 
-The other 2 are consumed automatically by name and never need manual activation.
+The other one is consumed automatically by name and never needs manual activation.
 
 ## Notes
 
-- None of these 3 environments are created, modified, or provisioned by
+- Neither of these environments is created, modified, or provisioned by
   the pipeline itself - all are operator-prepared preconditions, checked
   at runtime by each module (`command -v <tool>` inside `conda run -n
 <env>`) and failing fast with a clear error if missing.
@@ -40,7 +39,7 @@ The other 2 are consumed automatically by name and never need manual activation.
   step actually needs; version floors/pins mirror `docs/usage.md`, which
   remains the source of truth for per-parameter detail.
 - `ARCASHLA_EXTRACT`, `ARCASHLA_VALIDATE_FASTQ`, `ARCASHLA_GENOTYPE`,
-  `HLALA_TYPING`, `HIBAG_PREDICT`, and STAR
+  `HLALA_TYPING`, `HIBAG_PREDICT`, `HLAPM_BUILD_REF`, and STAR
   (`STAR_GENOMEGENERATE`/`STAR_ALIGN`) are exceptions to the
   "operator-prepared Conda environment" model above: each comes from its
   own module-owned `conda`/`environment.yml` and `container` directive, resolved
@@ -49,9 +48,18 @@ The other 2 are consumed automatically by name and never need manual activation.
   [usage docs](usage.md#rna-samplesheet-input),
   [usage docs](usage.md#arcashla-genotyping-environment),
   [usage docs](usage.md#wgs-samplesheet-input),
-  [usage docs](usage.md#hibag-dependency), and
+  [usage docs](usage.md#hibag-dependency),
+  [usage docs](usage.md#hlapm-container), and
   [usage docs](usage.md#hlapm-star-index) for details.
-  `ARCASHLA_EXTRACT` is the most recent to move, and was the last module in the
+  `HLAPM_BUILD_REF` is the most recent to move, and retired the `hlapm`
+  environment this table used to list: its R dependencies now come from
+  `modules/local/hlapm/build_ref/environment.yml`. It is a partial exception
+  in one respect - HLApm itself is an unpackaged git repository, so Conda
+  cannot install it. The module's container image bakes it in at a pinned
+  commit (`scripts/build_image_hlapm.sh`), and running under `-profile conda`
+  or with no profile still requires an operator-prepared checkout passed with
+  `--hlapm_repo`, which is otherwise an optional override.
+  `ARCASHLA_EXTRACT` moved just before it, and was the last module in the
   pipeline calling a tool off the host `PATH` with no directives of its own: it
   now provisions `samtools` from its own `environment.yml`/`container`
   (`bioconda::samtools=1.24`, the same pin and image the vendored nf-core
@@ -82,3 +90,13 @@ The other 2 are consumed automatically by name and never need manual activation.
     See [usage docs](usage.md#preparing-the-hla-la-graph).
   - Both scripts are idempotent and document their override variables under
     `--help`.
+- Locally built container images have their own helper scripts, which build
+  a Docker image and (when `singularity`/`apptainer` is present) convert it to
+  a local `.sif` the module's `container` directive references by path. Run the
+  one for whichever module you need before using a container profile:
+  - `scripts/build_image_arcashla.sh` &rarr; `ARCASHLA_GENOTYPE`
+    (`quay.io/hlarnaseq/arcashla-genotype:0.6.0`; no reference baked in).
+  - `scripts/build_image_hlapm.sh` &rarr; `HLAPM_BUILD_REF`
+    (`quay.io/hlarnaseq/hlapm-build-ref:38faa60`; HLApm itself **is** baked in,
+    at a pinned commit, since it has no Conda package. Needs network access to
+    `github.com` at build time). See [usage docs](usage.md#hlapm-container).
