@@ -26,7 +26,7 @@
 
 ## [HLApm](https://github.com/davenportlab/HLApm)
 
-> Davenport Lab. HLApm: personalized HLA reference building for bulk and single-cell RNA-seq. GitHub repository: https://github.com/davenportlab/HLApm. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+> Davenport Lab. HLApm: personalized HLA reference building for bulk and single-cell RNA-seq. GitHub repository: https://github.com/davenportlab/HLApm. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference. HLApm publishes no releases or tags, so this pipeline pins it by commit: `38faa6087bbd827ccab969d947f8df101e95d688` (2025-06-17), the version baked into `HLAPM_BUILD_REF`'s container image.
 
 ## [davenportlab/HLApm_farm_pipeline](https://github.com/davenportlab/HLApm_farm_pipeline)
 

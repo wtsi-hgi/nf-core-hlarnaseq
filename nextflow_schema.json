@@ -221,8 +221,8 @@
                     "type": "string",
                     "format": "directory-path",
                     "exists": true,
-                    "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm).",
-                    "help_text": "Required whenever `--rna_samples` is provided, independent of `--wgs_samples`. This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. The pipeline never clones or fetches HLApm at runtime; the checkout (including its bundled reference data) must be prepared by the operator beforehand.",
+                    "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm). Optional under a container profile; required without one.",
+                    "help_text": "This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. Under `-profile docker`/`singularity`/`apptainer`, `HLAPM_BUILD_REF`'s image already contains HLApm at a pinned commit (build it once with `scripts/build_image_hlapm.sh`), so this parameter is only needed to override that baked-in copy with a patched or newer checkout. Without a container engine (`-profile conda`, or no profile), HLApm cannot be provisioned automatically - Conda can install its R dependencies but not a git checkout - so this parameter is mandatory whenever `--rna_samples` and `--sample_key` are provided. The pipeline never clones or fetches HLApm at runtime; any checkout passed here (including its bundled reference data) must be prepared by the operator beforehand.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "arcashla_genes": {
