@@ -347,27 +347,57 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
 
 Immediately after alignment, each per-`(RNA sample, allele)` coordinate-sorted BAM (`STAR_ALIGN`'s own output, above) is additionally queryname-sorted with [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) (`samtools sort -n`); `STAR_ALIGN`'s coordinate-sorted BAM is unchanged and continues to be published as before. Once every distinct allele's GTF (from HLApm STAR index, above) has been concatenated into one cohort-wide `combined.gtf` (comment lines stripped), the pipeline runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of per-allele queryname-sorted BAMs plus the combined GTF. For each read, this script assigns it to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing `<rna_id>.edit_distance.tsv` (one row per read, with a `unique`/`best`/`ambiguous` confidence label) plus a `<rna_id>.stat.txt` run-statistics log. See [output docs](output.md#hlapm-read-quantification) for the resulting `hlapm/quantify/` layout.
 
-Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_distance.tsv`, the pipeline runs a new `HLAPM_SUMMARIZE_READCOUNTS` step over that same table, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script). For each RNA sample, it keeps only non-`ambiguous` reads whose winning-gene edit distance is at or below `--hlapm_quantify_max_edit_distance` (default `16`, matching the source script's hardcoded threshold), then counts the surviving reads per gene, producing `<rna_id>.HLA_gene_summary.tsv` (columns: `gene_name`, `n_reads_mapping`). This closes the "stops at the per-read table" gap left open by the earlier iteration; it runs inside the same `hlapm-quantify` Conda environment as `make_a_table_210804_allHLAgenes.py` (see below).
+Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_distance.tsv`, the pipeline runs a new `HLAPM_SUMMARIZE_READCOUNTS` step over that same table, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script). For each RNA sample, it keeps only non-`ambiguous` reads whose winning-gene edit distance is at or below `--hlapm_quantify_max_edit_distance` (default `16`, matching the source script's hardcoded threshold), then counts the surviving reads per gene, producing `<rna_id>.HLA_gene_summary.tsv` (columns: `gene_name`, `n_reads_mapping`). This closes the "stops at the per-read table" gap left open by the earlier iteration; it runs from the [shared data-tools container](#shared-data-tools-container) rather than alongside `make_a_table_210804_allHLAgenes.py`'s Python 2 environment (see below).
 
 `--hlapm_quantify_max_edit_distance` (default `16`) is passed straight through to this step as the maximum summed-mate edit distance (NM) a read may have and still count toward its assigned gene's read count.
 
 Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
 
-#### `hlapm-quantify` Conda environment
+#### HLApm read-quantification container
 
-Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the HLA-LA section above: the pipeline does not create it or install packages into it at any point. It is the last such environment in the pipeline - `HLAPM_BUILD_REF` no longer uses one (see [HLApm container](#hlapm-container) above). Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+`HLAPM_QUANTIFY_READS` provisions its own dependencies from
+[`modules/local/hlapm/quantify_reads/environment.yml`](../modules/local/hlapm/quantify_reads/environment.yml),
+which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm-quantify` Conda environment is gone; nothing needs to be created by hand.
 
-- Python 2
-- `pybam` (`pip install https://github.com/JohnLonginotto/pybam/zipball/master`)
-- `intervaltree` (PyPI)
-- R (>= 4.0)
-- CRAN packages `dplyr`, `tidyr`
+`make_a_table_210804_allHLAgenes.py` is unmodified legacy code, so this environment is a deliberately frozen **Python 2.7.15** (the newest Python 2 conda-forge ships) plus:
 
-For example:
+- `pybam`, pinned by commit `846d98603905c57c31bf7b9abaf2eb8c89899e60` - it is a GitHub-only package with no releases, tags or PyPI presence, so a commit SHA is the only reproducible handle on a version;
+- `intervaltree` 3.1.0. The script prefers `quicksect` and falls back to `intervaltree`; `quicksect` is deliberately **not** installed, so the script keeps taking the `intervaltree` branch that every result this pipeline has produced so far came from.
+
+Python 2 has been end of life since 2020 and receives no security updates. Freezing it inside a container, rather than asking operators to maintain a Python 2 environment, is precisely the point of this image; porting the script to Python 3 is the real fix and is a separate, much larger piece of work.
+
+Build the image once before running with a container profile:
 
 ```bash
-mamba install -n hlapm-quantify -c conda-forge r-base r-dplyr r-tidyr
+scripts/build_image_hlapm_quantify.sh
 ```
+
+This builds and tags the Docker image as `quay.io/hlarnaseq/hlapm-quantify-reads:py2.7.15`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed, and converts it into a local `modules/local/hlapm/quantify_reads/hlapm-quantify-reads.sif` for `-profile singularity`/`apptainer`. The build needs network access to the Conda channels, PyPI and `github.com`. Override the pinned pybam commit with `PYBAM_COMMIT=<sha>` - see `scripts/build_image_hlapm_quantify.sh --help`, and note that `-profile conda` reads the pin from `environment.yml`, so change both to keep those two paths in step.
+
+Under `-profile conda` the same `environment.yml` is used, which means Conda needs PyPI and `github.com` access the first time it creates that environment - `pybam` and `intervaltree` are `pip:` entries, outside Conda's solver.
+
+#### Shared data-tools container
+
+Four modules do not wrap a bioinformatics tool at all - they run this repository's own small analysis scripts from `bin/`:
+
+| Module                       | Script                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `HLA_CONSENSUS`              | `call_hla_consensus.py` (python3, pandas)                                |
+| `HLAPM_PREPARE_INPUT`        | `consensus_to_hlapm.py` (python3)                                        |
+| `ARCASHLA_COMBINE`           | `combine_arcashla_genotypes.R` (jsonlite, dplyr, tibble, stringr, purrr) |
+| `HLAPM_SUMMARIZE_READCOUNTS` | `summarize_hla_readcounts.R` (dplyr, tidyr)                              |
+
+All four share one environment, [`containers/datatools/environment.yml`](../containers/datatools/environment.yml), and one image built from it. Unlike every other environment file here it is not module-local, because four near-identical copies of an overlapping package list would drift apart; see [`containers/datatools/README.md`](../containers/datatools/README.md).
+
+Build it once before running with a container profile:
+
+```bash
+scripts/build_image_datatools.sh
+```
+
+This builds `quay.io/hlarnaseq/datatools:1.0` and the local `containers/datatools/datatools.sif`, following the same local-image pattern as the other images described above. Under `-profile conda`, Nextflow creates the one environment and all four modules share it.
+
+Package versions are pinned to those the pipeline's existing published results were produced with, so containerizing these steps changes no output. Running any of these four modules with no `-profile conda`/`docker`/`singularity`/`apptainer` now fails fast with a message naming those profiles, instead of silently using whichever `python3`/`Rscript` happens to be on the host `PATH` - the same trade already made for `ARCASHLA_EXTRACT`, `HIBAG_PREDICT` and `HLAPM_BUILD_REF`.
 
 ## Running the pipeline
 

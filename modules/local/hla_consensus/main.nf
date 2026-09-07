@@ -2,6 +2,17 @@ process HLA_CONSENSUS {
     tag "hla_consensus"
     label 'process_single'
 
+    // Shared python3 + R environment, not module-local: see
+    // containers/datatools/README.md. Under -profile singularity/apptainer the
+    // image is referenced as a local .sif by path (built by
+    // scripts/build_image_datatools.sh); under -profile docker as a
+    // quay.io-prefixed tag matching nextflow.config's docker.registry, which
+    // Docker resolves against its local image store with no network access.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.0' }"
+
     publishDir "${params.outdir}/hla_consensus",
         mode: params.publish_dir_mode,
         saveAs: { filename -> filename == 'versions.yml' ? null : filename }
@@ -22,6 +33,16 @@ process HLA_CONSENSUS {
     def rna_excl_arg = params.rna_excluded_samples ? "--rna-excluded-samples ${rna_excluded_samples}" : ""
     def wgs_excl_arg = params.wgs_excluded_samples ? "--wgs-excluded-samples ${wgs_excluded_samples}" : ""
     """
+    # The conda/container directives above provision python3 and pandas.
+    # Neither applies when the pipeline is run with no -profile
+    # conda/docker/singularity/apptainer at all, in which case the task falls
+    # back to the host PATH - fail with an actionable message rather than a
+    # bare ImportError, as HIBAG_PREDICT does.
+    python3 -c "import pandas" >/dev/null 2>&1 || {
+        echo "ERROR: python3 with pandas is not available. Run the pipeline with -profile conda, docker, singularity, or apptainer so this module gets the environment declared in containers/datatools/environment.yml." >&2
+        exit 127
+    }
+
     call_hla_consensus.py \\
         --arcashla-csv ${arcashla_combined_csv} \\
         --hlala-file ${hlala_combined_tsv} \\

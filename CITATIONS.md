@@ -34,11 +34,11 @@
 
 ## [pybam](https://github.com/JohnLonginotto/pybam)
 
-> Longinotto J. pybam: a pure-Python BAM file reader. GitHub repository: https://github.com/JohnLonginotto/pybam. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+> Longinotto J. pybam: a pure-Python BAM file reader. GitHub repository: https://github.com/JohnLonginotto/pybam. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference. pybam publishes no releases, tags or PyPI package, so this pipeline pins it by commit: `846d98603905c57c31bf7b9abaf2eb8c89899e60`, the version installed into `HLAPM_QUANTIFY_READS`'s container image.
 
 ## [intervaltree](https://pypi.org/project/intervaltree/)
 
-> Tretyakov K, Halbert CL. intervaltree: Editable interval tree data structure for Python. PyPI package: https://pypi.org/project/intervaltree/. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference.
+> Tretyakov K, Halbert CL. intervaltree: Editable interval tree data structure for Python. PyPI package: https://pypi.org/project/intervaltree/. No published paper or DOI was found for this tool at the time this citation was added; this entry is provisional pending a published reference. Pinned to version 3.1.0; `make_a_table_210804_allHLAgenes.py` can also use `quicksect` instead, which this pipeline deliberately does not install.
 
 ## [validatefastq](https://github.com/biopet/validatefastq)
 

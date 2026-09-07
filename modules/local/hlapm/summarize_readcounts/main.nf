@@ -2,6 +2,16 @@ process HLAPM_SUMMARIZE_READCOUNTS {
     tag "$meta.id"
     label 'process_single'
 
+    // Shared python3 + R environment, not module-local: see
+    // containers/datatools/README.md. This module previously shared the
+    // operator-prepared `hlapm-quantify` Conda environment with
+    // HLAPM_QUANTIFY_READS; that environment is gone - the Python 2 half
+    // became that module's own image, this R half moved here.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.0' }"
+
     input:
     tuple val(meta), path(edit_distance_tsv)
 
@@ -11,36 +21,36 @@ process HLAPM_SUMMARIZE_READCOUNTS {
 
     script:
     """
-    HLAPM_QUANTIFY_CONDA_ENV="hlapm-quantify"
-
-    command -v conda >/dev/null 2>&1 || {
-        echo "ERROR: conda is required to run summarize_hla_readcounts.R from the \${HLAPM_QUANTIFY_CONDA_ENV} environment" >&2
+    # See HLA_CONSENSUS for why this guard exists: with no
+    # conda/docker/singularity/apptainer profile the task falls back to the
+    # host PATH, and an actionable message beats a bare "command not found".
+    command -v Rscript >/dev/null 2>&1 || {
+        echo "ERROR: Rscript is not available. Run the pipeline with -profile conda, docker, singularity, or apptainer so this module gets the environment declared in containers/datatools/environment.yml." >&2
         exit 127
     }
 
-    conda run -n "\${HLAPM_QUANTIFY_CONDA_ENV}" bash -lc 'command -v Rscript >/dev/null 2>&1' || {
-        echo "ERROR: Rscript is not available in the \${HLAPM_QUANTIFY_CONDA_ENV} Conda environment" >&2
-        exit 127
-    }
-
-    conda run -n "\${HLAPM_QUANTIFY_CONDA_ENV}" Rscript "${projectDir}/bin/summarize_hla_readcounts.R" "${edit_distance_tsv}" "${params.hlapm_quantify_max_edit_distance}" "${meta.id}.HLA_gene_summary.tsv"
+    # Staged onto PATH from bin/ by Nextflow, and carries its own
+    # "#!/usr/bin/env Rscript" shebang. Invoked by name rather than as
+    # "\${projectDir}/bin/..." because that path does not exist inside a
+    # container.
+    summarize_hla_readcounts.R "${edit_distance_tsv}" "${params.hlapm_quantify_max_edit_distance}" "${meta.id}.HLA_gene_summary.tsv"
 
     set +e
-    r_version=\$(conda run -n "\${HLAPM_QUANTIFY_CONDA_ENV}" Rscript -e 'cat(as.character(getRversion()))' 2>&1)
+    r_version=\$(Rscript -e 'cat(as.character(getRversion()))' 2>&1)
     set -e
     if [[ -z "\${r_version}" ]]; then
         r_version="unknown"
     fi
 
     set +e
-    dplyr_version=\$(conda run -n "\${HLAPM_QUANTIFY_CONDA_ENV}" Rscript -e 'cat(as.character(packageVersion("dplyr")))' 2>&1)
+    dplyr_version=\$(Rscript -e 'cat(as.character(packageVersion("dplyr")))' 2>&1)
     set -e
     if [[ -z "\${dplyr_version}" ]]; then
         dplyr_version="unknown"
     fi
 
     set +e
-    tidyr_version=\$(conda run -n "\${HLAPM_QUANTIFY_CONDA_ENV}" Rscript -e 'cat(as.character(packageVersion("tidyr")))' 2>&1)
+    tidyr_version=\$(Rscript -e 'cat(as.character(packageVersion("tidyr")))' 2>&1)
     set -e
     if [[ -z "\${tidyr_version}" ]]; then
         tidyr_version="unknown"
