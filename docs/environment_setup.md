@@ -98,7 +98,11 @@ name matters at runtime any more.
     (~2.25 GB download, ~29 GB on disk, a few hours, up to 40 GB of RAM; no
     image-build step needed, the `hla-la:1.0.4` image is public). It fetches
     and indexes a _published_ PRG graph and cannot construct one from scratch.
-    See [usage docs](usage.md#preparing-the-hla-la-graph).
+    Indexing means both `HLA-LA --action prepareGraph` and `bwa index` over the
+    graph's `extendedReferenceGenome.fa` - the latter because HLA-LA would
+    otherwise build it inside every concurrent `HLALA_TYPING` task, all writing
+    to the same shared files. See
+    [usage docs](usage.md#preparing-the-hla-la-graph).
   - Both scripts are idempotent and document their override variables under
     `--help`.
 - Locally built container images have their own helper scripts, which build

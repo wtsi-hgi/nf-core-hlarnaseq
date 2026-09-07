@@ -125,14 +125,25 @@ Prepare the graph once, out of band, with:
 scripts/build_reference_hlala.sh /path/to/HLA-LA/graphs
 ```
 
-This downloads the published PRG graph package (`PRG_MHC_GRCh38_withIMGT`, ~2.25 GB), verifies its md5, extracts it, and indexes it (`HLA-LA --action prepareGraph`) inside the same pinned `hla-la:1.0.4` container image `HLALA_TYPING` itself runs - so the graph is serialized by the exact build that will later consume it. Unlike arcasHLA's image, this one is public (Biocontainers/Galaxy depot), so there is no companion image-build script: the container is pulled on first use. Docker is used when its daemon is reachable, otherwise Singularity/Apptainer.
+This downloads the published PRG graph package (`PRG_MHC_GRCh38_withIMGT`, ~2.25 GB), verifies its md5, extracts it, and then indexes it twice over, inside the same pinned `hla-la:1.0.4` container image `HLALA_TYPING` itself runs - so the graph is indexed by the exact build that will later consume it:
+
+1. `HLA-LA --action prepareGraph`, which produces `serializedGRAPH`; and
+2. `bwa index` over `extendedReferenceGenome/extendedReferenceGenome.fa`.
+
+Unlike arcasHLA's image, this one is public (Biocontainers/Galaxy depot), so there is no companion image-build script: the container is pulled on first use. Docker is used when its daemon is reachable, otherwise Singularity/Apptainer. That image already ships the `bwa` step 2 needs, so nothing extra has to be installed.
+
+**Step 2 is not optional, even though `prepareGraph` does not do it.** The published tarball ships `mapping_PRGonly/referenceGenome.fa` pre-indexed but `extendedReferenceGenome/` with the FASTA alone, and HLA-LA copes by building that bwa index lazily, the first time it maps reads against the extended reference genome - writing it back into the graph directory, next to the FASTA. The pipeline hands `HLALA_TYPING` one shared graph directory for every WGS sample, so with an unindexed graph all the concurrent per-sample tasks find the index missing, all launch the same `bwa index` against the same paths, and they overwrite each other's partial output: all but (at most) one sample fails, hours into the run. Building the index once, up front, removes the race. The pipeline also refuses to start a `--wgs_samples` run against a graph that lacks it, naming this script in the error, rather than letting the race happen.
 
 Budget for it before starting:
 
-- **~29 GB on disk** for the extracted and indexed graph (`serializedGRAPH` alone is ~5.5 GB), plus the 2.25 GB tarball. The script checks free space on the target filesystem up front (override the floor with `REQUIRED_GB`) rather than failing hours in.
-- **A few hours**, and per HLA-LA's own README indexing "might take up to 40G of memory". The script warns if the machine has less than 40 GB of RAM but still proceeds.
+- **~29 GB on disk** for the extracted and fully indexed graph (`serializedGRAPH` alone is ~5.5 GB, and the bwa index adds ~5.1 GB on top of the 3 GB extended reference FASTA), plus the 2.25 GB tarball. The script checks free space on the target filesystem up front (override the floor with `REQUIRED_GB`) rather than failing hours in.
+- **A few hours** for `prepareGraph`, and per HLA-LA's own README it "might take up to 40G of memory". The script warns if the machine has less than 40 GB of RAM but still proceeds. `bwa index` adds roughly another hour and is not memory-hungry.
 
-Re-running the script is free: if `<output-dir>/<graph>/serializedGRAPH` already exists and is non-empty, it reports the graph as already built and exits without downloading, extracting, or indexing anything - that check runs _before_ the download. **To rebuild, delete the graph directory and re-run**; that is deliberately the only supported way, so there is no "force" flag that could half-overwrite an existing graph. An interrupted run that already extracted the package resumes at the indexing step instead of re-downloading. `GRAPH_NAME`, `GRAPH_URL`, `GRAPH_MD5`, `TARBALL` (use an already-downloaded copy), `IMAGE_TAG`, `SIF_PATH`, and `REQUIRED_GB` are all overridable - see `scripts/build_reference_hlala.sh --help`.
+Re-running the script is free: if the graph is already fully indexed - `<output-dir>/<graph>/serializedGRAPH` non-empty **and** the extended reference FASTA's `.sa`/`.ann`/`.bwt` all present - it reports the graph as already built and exits without downloading, extracting, or indexing anything, and that check runs _before_ the download.
+
+Each indexing step is skipped independently when its own output is already in place, so **a graph prepared before this pipeline built the bwa index is repaired by simply re-running the script on the same directory**: it adds the missing index and neither re-downloads the package nor re-runs the multi-hour `prepareGraph`. An interrupted run that already extracted the package likewise resumes at indexing instead of re-downloading.
+
+**To force a full rebuild, delete the graph directory and re-run**; that is deliberately the only supported way, so there is no "force" flag that could half-overwrite an existing graph. `GRAPH_NAME`, `GRAPH_URL`, `GRAPH_MD5`, `TARBALL` (use an already-downloaded copy), `IMAGE_TAG`, `SIF_PATH`, and `REQUIRED_GB` are all overridable - see `scripts/build_reference_hlala.sh --help`.
 
 On success the script prints the exact parameters to pass:
 

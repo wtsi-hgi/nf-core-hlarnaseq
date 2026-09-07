@@ -460,6 +460,17 @@ def hibagModelExistsError() {
 //
 // Exit pipeline if WGS HLA-LA inputs are provided without a prepared graph directory
 //
+// The bwa-index check is a fail-fast for a bug that is otherwise expensive and
+// deeply confusing to hit. HLA-LA bwa-indexes the graph's extended reference
+// genome lazily, on first use, writing the index NEXT TO THE FASTA - i.e. back
+// into the graph directory (BWAmapper::map() -> make_sure_ref_is_indexed(), in
+// HLA-LA's src/mapper/bwa/BWAmapper.cpp). The graph reaches HLALA_TYPING as a
+// single shared `path` input, so every per-sample task sees the same underlying
+// directory: with an unindexed graph, all of them start that same `bwa index`
+// at once and clobber each other, and all but (at most) one sample fails hours
+// into the run. Refusing here, before any task launches, turns that into one
+// line of output and one re-run of scripts/build_reference_hlala.sh.
+//
 def hlalaGraphDirExistsError() {
     if (params.wgs_samples && !params.hlala_graph_dir) {
         error("Please provide --hlala_graph_dir when using --wgs_samples so HLA-LA can find its prepared graph directory.")
@@ -467,6 +478,37 @@ def hlalaGraphDirExistsError() {
 
     if (params.wgs_samples && !file(params.hlala_graph_dir).exists()) {
         error("Please check --hlala_graph_dir -> Directory does not exist: ${params.hlala_graph_dir}")
+    }
+
+    if (params.wgs_samples) {
+        // Only the conventional in-graph location is checked. A graph that
+        // redirects its extended reference genome elsewhere with
+        // extendedReferenceGenomePath.txt, or that has none at all, is left
+        // alone rather than guessed at - as are the stub graph directories the
+        // test profiles point at, which have no FASTA here either.
+        def graph_dir = file("${params.hlala_graph_dir}/${params.hlala_graph}")
+        def ext_ref   = graph_dir.resolve('extendedReferenceGenome/extendedReferenceGenome.fa')
+
+        if (!graph_dir.resolve('extendedReferenceGenomePath.txt').exists() && ext_ref.exists()) {
+            // HLA-LA's own definition of "indexed": BWAmapper::ref_is_indexed()
+            // tests exactly these three suffixes.
+            def missing = ['.sa', '.ann', '.bwt'].findAll { suffix ->
+                !graph_dir.resolve("extendedReferenceGenome/extendedReferenceGenome.fa${suffix}").exists()
+            }
+
+            if (missing) {
+                error(
+                    "The HLA-LA graph at ${graph_dir} is not fully prepared: its extended reference\n" +
+                    "genome has no bwa index (missing ${missing.join(', ')} beside extendedReferenceGenome.fa).\n" +
+                    "  HLA-LA would build that index itself, inside every HLALA_TYPING task, writing to the\n" +
+                    "  same shared files - so concurrent WGS samples overwrite each other's index and all but\n" +
+                    "  one fail. Build it once, up front, by re-running:\n" +
+                    "      scripts/build_reference_hlala.sh ${params.hlala_graph_dir}\n" +
+                    "  That adds only the missing index: it neither re-downloads the graph package nor\n" +
+                    "  re-runs the multi-hour prepareGraph step."
+                )
+            }
+        }
     }
 }
 //

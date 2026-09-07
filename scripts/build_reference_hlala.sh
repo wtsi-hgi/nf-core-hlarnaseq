@@ -3,10 +3,19 @@ set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # This script FETCHES AND INDEXES A PUBLISHED PRG graph. It downloads the
-# prebuilt PRG data package, verifies it, extracts it, and runs
-# `HLA-LA --action prepareGraph` over it to produce `serializedGRAPH`. That is
-# exactly, and only, what nf-core's `hlala/preparegraph` module does, and it is
-# all the pipeline needs.
+# prebuilt PRG data package, verifies it, extracts it, and indexes it twice
+# over:
+#
+#   1. `HLA-LA --action prepareGraph`, producing `serializedGRAPH` - exactly,
+#      and only, what nf-core's `hlala/preparegraph` module does; and
+#   2. `bwa index` over `extendedReferenceGenome/extendedReferenceGenome.fa`.
+#
+# Step 2 is not part of `prepareGraph`, and the published tarball does not ship
+# it: `mapping_PRGonly/referenceGenome.fa` arrives pre-indexed but
+# `extendedReferenceGenome/` contains the FASTA alone. HLA-LA therefore builds
+# that index lazily, at typing time - see the comment on step 7 for why leaving
+# it to do that breaks multi-sample runs. Both indexes together are what the
+# pipeline needs.
 #
 # CONSTRUCTING a PRG graph from scratch (for a newer IMGT/HLA release, or for
 # custom loci) is NOT the aim of the script.
@@ -17,11 +26,20 @@ usage() {
 Usage:
   scripts/build_reference_hlala.sh <output-dir>
 
-Fetches a published HLA-LA PRG graph package into <output-dir> and indexes it
-by running `HLA-LA --action prepareGraph` inside the SAME pinned container
-image the HLALA_TYPING module itself runs (hla-la 1.0.4) - so the graph is
-serialized by the exact build that will later consume it, with no separate
-Conda environment to set up.
+Fetches a published HLA-LA PRG graph package into <output-dir> and indexes it,
+by running `HLA-LA --action prepareGraph` and then `bwa index` over the graph's
+extended reference genome, inside the SAME pinned container image the
+HLALA_TYPING module itself runs (hla-la 1.0.4) - so the graph is indexed by the
+exact build that will later consume it, with no separate Conda environment to
+set up. That image already contains the bwa the second step needs (bwa 0.7.12
+is a dependency of the hla-la Conda package), so it needs no extra tooling.
+
+Both indexes matter. HLA-LA builds the bwa index itself, lazily, the first time
+it maps reads against the extended reference genome - writing it INTO the graph
+directory. Since the pipeline shares one graph directory across every WGS
+sample, all concurrent HLALA_TYPING tasks would start that same `bwa index` at
+once and clobber each other's output, so all but (at most) one sample fails.
+Building it here, once, out of band, removes the race.
 
 Unlike arcasHLA's reference, this image is public (Biocontainers/Galaxy
 depot), so there is no companion build_image_*.sh script: the container is
@@ -34,21 +52,28 @@ IMGT/HLA release is not scriptable outside the tool author's own environment
 newer graph, ask upstream.
 
 What to expect before you start it:
-  * ~2.25 GB download, and about 29 GB on disk once extracted and indexed
-    (serializedGRAPH alone is ~5.5 GB). The free-space pre-flight below
-    refuses up front rather than failing hours in.
-  * Indexing takes a few hours and, per HLA-LA's own README, "might take up
-    to 40G of memory". This is a one-off, out-of-band operation.
+  * ~2.25 GB download, and about 29 GB on disk once extracted and fully
+    indexed (serializedGRAPH alone is ~5.5 GB, and the bwa index over the
+    3 GB extended reference genome adds ~5.1 GB more). The free-space
+    pre-flight below refuses up front rather than failing hours in.
+  * prepareGraph takes a few hours and, per HLA-LA's own README, "might take
+    up to 40G of memory"; `bwa index` over a 3 GB FASTA adds roughly another
+    hour but is not memory-hungry. This is a one-off, out-of-band operation.
 
 Point the pipeline at the result with (both values are printed on success):
   --hlala_graph_dir <output-dir> --hlala_graph <GRAPH_NAME>
 
-Re-running is free: if the graph is already indexed, the script says so and
-exits without downloading, extracting or indexing anything - it checks that
-BEFORE the download, so pointing it at a finished graph costs nothing. To
-force a rebuild, delete the graph directory (<output-dir>/<GRAPH_NAME>) and
-re-run. That is deliberately the only way to do it; there is no FORCE_*
-override (see the comment where the check is implemented).
+Re-running is free: if the graph is already fully indexed, the script says so
+and exits without downloading, extracting or indexing anything - it checks that
+BEFORE the download, so pointing it at a finished graph costs nothing. Each
+indexing step is skipped independently when its own output is already there, so
+a graph built by an earlier version of this script (serializedGRAPH present,
+bwa index missing) is repaired by just re-running the script on the same
+directory: it adds the missing bwa index and neither re-downloads nor
+re-serializes. To force a full rebuild, delete the graph directory
+(<output-dir>/<GRAPH_NAME>) and re-run. That is deliberately the only way to do
+it; there is no FORCE_* override (see the comment where the check is
+implemented).
 
 Environment:
   GRAPH_NAME    Graph directory name inside <output-dir>, and the value to pass
@@ -103,6 +128,11 @@ TARBALL="${TARBALL:-}"
 # binary-level action, and this is the path nf-core's hlala/preparegraph module
 # invokes in this same image.
 HLALA_BIN="/usr/local/opt/hla-la/bin/HLA-LA"
+# Unqualified on purpose: bwa arrives as a Conda dependency of hla-la, so it is
+# on PATH inside the image, and HLA-LA itself locates it the same way (its
+# find_path() falls through to `which bwa`). Hard-coding a prefix here would
+# only add a way for the two to disagree.
+BWA_BIN="bwa"
 
 mkdir -p "$1" 2>/dev/null || {
     echo "ERROR: cannot create output directory '$1' - check the path and its permissions." >&2
@@ -115,23 +145,74 @@ if [[ ! -w "${OUTPUT_DIR}" ]]; then
 fi
 GRAPH_DIR="${OUTPUT_DIR}/${GRAPH_NAME}"
 
+# Resolve the extended reference genome FASTA exactly the way HLA-LA's own
+# binary does in its `--action HLA` path (src/HLA-LA.cpp): the path named on the
+# first line of extendedReferenceGenomePath.txt when that file exists, and
+# otherwise the conventional location inside the graph directory. Mirroring the
+# tool's own resolution is the point - the file this script indexes has to be
+# the file the tool will look for.
+#
+# `head -n 1 | tr -d '\r\n'` matches HLA-LA's Utilities::getFirstLine(), which
+# strips the line terminator and nothing else - so a path containing spaces
+# survives here just as it does there.
+extended_reference_fasta() {
+    if [[ -e "${GRAPH_DIR}/extendedReferenceGenomePath.txt" ]]; then
+        head -n 1 "${GRAPH_DIR}/extendedReferenceGenomePath.txt" | tr -d '\r\n'
+    else
+        printf '%s' "${GRAPH_DIR}/extendedReferenceGenome/extendedReferenceGenome.fa"
+    fi
+}
+
+# The three suffixes are HLA-LA's own definition of "indexed"
+# (BWAmapper::ref_is_indexed(), src/mapper/bwa/BWAmapper.cpp): if any one of
+# them is missing it runs `bwa index`. `bwa index` also writes .amb and .pac,
+# but testing for those too would let this script's idea of "indexed" disagree
+# with the tool's, which is the only thing that actually matters.
+extended_reference_is_indexed() {
+    local fasta="$1" suffix
+    [[ -n "${fasta}" && -s "${fasta}" ]] || return 1
+    for suffix in .sa .ann .bwt; do
+        [[ -s "${fasta}${suffix}" ]] || return 1
+    done
+    return 0
+}
+
 # --------------------------------------------------------------------------
 # 1. Already indexed? Then there is nothing to do.
 #
 # This runs FIRST, before any network access, so re-running the script against
 # a finished graph is instant and cannot re-download 2.25 GB by accident.
 #
+# "Indexed" means BOTH indexing steps are done: serializedGRAPH from
+# prepareGraph, and the bwa index over the extended reference genome. Testing
+# serializedGRAPH alone - as this check used to - would make the bwa-index step
+# unreachable for anyone who already has a serialized graph, which is precisely
+# the population that needs it.
+#
 # There is deliberately no FORCE_REINDEX-style override: removing
 # ${GRAPH_DIR} is already the obvious, sufficient and unambiguous way to force
 # a rebuild, and a second mechanism would only add a way to half-overwrite an
 # existing graph. Please don't re-add one.
 # --------------------------------------------------------------------------
-if [[ -s "${GRAPH_DIR}/serializedGRAPH" ]]; then
-    echo "Graph already indexed: ${GRAPH_DIR}/serializedGRAPH exists and is non-empty."
+EXT_REF_FASTA="$(extended_reference_fasta)"
+
+if [[ -s "${GRAPH_DIR}/serializedGRAPH" ]] && extended_reference_is_indexed "${EXT_REF_FASTA}"; then
+    echo "Graph already indexed: ${GRAPH_DIR}/serializedGRAPH and the bwa index for"
+    echo "${EXT_REF_FASTA} are both present and non-empty."
     echo "Nothing to download or index. To rebuild, remove ${GRAPH_DIR} and re-run."
     echo
     echo "Use it with: --hlala_graph_dir ${OUTPUT_DIR} --hlala_graph ${GRAPH_NAME}"
     exit 0
+fi
+
+# A graph left half-finished by an earlier version of this script (which did
+# not build the bwa index at all), or by an interrupted run. Say so plainly,
+# because from here on the script skips almost everything.
+if [[ -s "${GRAPH_DIR}/serializedGRAPH" ]]; then
+    echo "Graph at ${GRAPH_DIR} is serialized but its extended reference genome is not"
+    echo "bwa-indexed. Only the missing bwa index will be built: nothing is downloaded,"
+    echo "extracted, or re-serialized."
+    echo
 fi
 
 # --------------------------------------------------------------------------
@@ -305,45 +386,147 @@ fi
 #    tool sees, logs and (if it ever serializes any) records are the same ones
 #    that exist on the host.
 # --------------------------------------------------------------------------
-echo
-echo "Indexing ${GRAPH_DIR} with ${HLALA_BIN} --action prepareGraph (this takes a few hours) ..."
-case "${RUNTIME}" in
-    docker)
-        # -u: write serializedGRAPH as the invoking user, not root, so the
-        # result is usable (and deletable) afterwards - the same fix
-        # nextflow.config's docker profile applies via docker.runOptions.
-        echo "+ docker run --rm -u $(id -u):$(id -g) -v ${OUTPUT_DIR}:${OUTPUT_DIR} ${IMAGE_TAG} ${HLALA_BIN} --action prepareGraph --PRG_graph_dir ${GRAPH_DIR}"
-        docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "${OUTPUT_DIR}:${OUTPUT_DIR}" \
-            "${IMAGE_TAG}" \
-            "${HLALA_BIN}" --action prepareGraph --PRG_graph_dir "${GRAPH_DIR}"
-        ;;
-    singularity | apptainer)
-        # Singularity/Apptainer run as the invoking host user already, so no
-        # -u equivalent is needed; --bind is writable by default.
-        echo "+ ${RUNTIME} exec --bind ${OUTPUT_DIR}:${OUTPUT_DIR} ${SIF_PATH} ${HLALA_BIN} --action prepareGraph --PRG_graph_dir ${GRAPH_DIR}"
-        "${RUNTIME}" exec \
-            --bind "${OUTPUT_DIR}:${OUTPUT_DIR}" \
-            "${SIF_PATH}" \
-            "${HLALA_BIN}" --action prepareGraph --PRG_graph_dir "${GRAPH_DIR}"
-        ;;
-esac
 
-# --------------------------------------------------------------------------
-# 7. Verify the result, then print what to hand the pipeline.
-# --------------------------------------------------------------------------
+# Skipped when serializedGRAPH is already there, so a re-run that only needs
+# the bwa index below does not redo a multi-hour serialization.
+if [[ -s "${GRAPH_DIR}/serializedGRAPH" ]]; then
+    echo
+    echo "Skipping prepareGraph: ${GRAPH_DIR}/serializedGRAPH already exists and is non-empty."
+else
+    echo
+    echo "Indexing ${GRAPH_DIR} with ${HLALA_BIN} --action prepareGraph (this takes a few hours) ..."
+    case "${RUNTIME}" in
+        docker)
+            # -u: write serializedGRAPH as the invoking user, not root, so the
+            # result is usable (and deletable) afterwards - the same fix
+            # nextflow.config's docker profile applies via docker.runOptions.
+            echo "+ docker run --rm -u $(id -u):$(id -g) -v ${OUTPUT_DIR}:${OUTPUT_DIR} ${IMAGE_TAG} ${HLALA_BIN} --action prepareGraph --PRG_graph_dir ${GRAPH_DIR}"
+            docker run --rm \
+                -u "$(id -u):$(id -g)" \
+                -v "${OUTPUT_DIR}:${OUTPUT_DIR}" \
+                "${IMAGE_TAG}" \
+                "${HLALA_BIN}" --action prepareGraph --PRG_graph_dir "${GRAPH_DIR}"
+            ;;
+        singularity | apptainer)
+            # Singularity/Apptainer run as the invoking host user already, so no
+            # -u equivalent is needed; --bind is writable by default.
+            echo "+ ${RUNTIME} exec --bind ${OUTPUT_DIR}:${OUTPUT_DIR} ${SIF_PATH} ${HLALA_BIN} --action prepareGraph --PRG_graph_dir ${GRAPH_DIR}"
+            "${RUNTIME}" exec \
+                --bind "${OUTPUT_DIR}:${OUTPUT_DIR}" \
+                "${SIF_PATH}" \
+                "${HLALA_BIN}" --action prepareGraph --PRG_graph_dir "${GRAPH_DIR}"
+            ;;
+    esac
+fi
+
 if [[ ! -s "${GRAPH_DIR}/serializedGRAPH" ]]; then
     echo "ERROR: ${GRAPH_DIR}/serializedGRAPH is missing or empty after indexing -" >&2
     echo "       check the output above for the actual failure and re-run." >&2
     exit 1
 fi
 
+# --------------------------------------------------------------------------
+# 7. bwa-index the extended reference genome.
+#
+#    WHY THIS STEP EXISTS. `prepareGraph` does not build this index, and the
+#    published tarball does not ship it: mapping_PRGonly/referenceGenome.fa
+#    arrives with its .amb/.ann/.bwt/.pac/.sa, but extendedReferenceGenome/
+#    contains the FASTA alone. HLA-LA copes by indexing it lazily - in the
+#    `--action HLA` path, BWAmapper::map() calls make_sure_ref_is_indexed(),
+#    which shells out to `bwa index` (src/mapper/bwa/BWAmapper.cpp) - and
+#    writes the result NEXT TO THE FASTA, i.e. back into the graph directory.
+#
+#    That is fine for one sample at a time and broken for a pipeline. The graph
+#    is a single shared, read-mostly input: HLALA_TYPING receives it as a
+#    `path` input, so every per-sample task sees the same underlying directory.
+#    Run N WGS samples and all N tasks find the index missing, all N launch
+#    `bwa index` against the same paths, and they overwrite each other's
+#    half-written output - so all but (at most) one sample fails, hours in, for
+#    a reason that looks nothing like its cause.
+#
+#    Building it once here removes the race outright, and is why
+#    hlalaGraphDirExistsError() in
+#    subworkflows/local/utils_nfcore_hlarnaseq_pipeline/main.nf now refuses to
+#    start a --wgs_samples run against a graph that lacks it.
+#
+#    `bwa index` takes no thread or memory options - there is nothing to size
+#    to the host here, unlike prepareGraph.
+# --------------------------------------------------------------------------
+
+# Re-resolve: on a fresh run the graph directory did not exist when this was
+# first computed, so extendedReferenceGenomePath.txt (if the package ships one)
+# could not be read yet.
+EXT_REF_FASTA="$(extended_reference_fasta)"
+
+if [[ ! -s "${EXT_REF_FASTA}" ]]; then
+    # Advisory, not fatal, for the same reason as the file-set loop below: the
+    # exact layout differs between the graph packages HLA-LA publishes, and a
+    # graph with no extended reference genome simply has no index to build.
+    echo
+    echo "WARNING: ${EXT_REF_FASTA} is missing or empty, so there is no extended reference" >&2
+    echo "         genome to bwa-index. If this graph does use one, HLA-LA will try to index" >&2
+    echo "         it at typing time and concurrent samples will race on it." >&2
+elif extended_reference_is_indexed "${EXT_REF_FASTA}"; then
+    echo
+    echo "Skipping bwa index: ${EXT_REF_FASTA} already has its .sa, .ann and .bwt."
+else
+    echo
+    echo "Building the bwa index for ${EXT_REF_FASTA} (~1 hour for a 3 GB FASTA) ..."
+    # Mounted the same way as prepareGraph above. When
+    # extendedReferenceGenomePath.txt points outside ${OUTPUT_DIR}, that path's
+    # own directory has to be mounted as well, since the OUTPUT_DIR mount does
+    # not cover it - and it has to be writable, because that is where the index
+    # files land.
+    EXT_REF_DIR="$(cd "$(dirname "${EXT_REF_FASTA}")" && pwd)"
+    EXTRA_MOUNT=""
+    if [[ "${EXT_REF_DIR}" != "${OUTPUT_DIR}" && "${EXT_REF_DIR}" != "${OUTPUT_DIR}/"* ]]; then
+        echo "NOTE: ${EXT_REF_FASTA} lies outside ${OUTPUT_DIR} (via"
+        echo "      extendedReferenceGenomePath.txt), so ${EXT_REF_DIR} is mounted too."
+        if [[ ! -w "${EXT_REF_DIR}" ]]; then
+            echo "ERROR: ${EXT_REF_DIR} is not writable, and bwa index writes its output there." >&2
+            exit 1
+        fi
+        EXTRA_MOUNT="${EXT_REF_DIR}"
+    fi
+
+    case "${RUNTIME}" in
+        docker)
+            DOCKER_MOUNTS=(-v "${OUTPUT_DIR}:${OUTPUT_DIR}")
+            [[ -n "${EXTRA_MOUNT}" ]] && DOCKER_MOUNTS+=(-v "${EXTRA_MOUNT}:${EXTRA_MOUNT}")
+            echo "+ docker run --rm -u $(id -u):$(id -g) ${DOCKER_MOUNTS[*]} ${IMAGE_TAG} ${BWA_BIN} index ${EXT_REF_FASTA}"
+            docker run --rm \
+                -u "$(id -u):$(id -g)" \
+                "${DOCKER_MOUNTS[@]}" \
+                "${IMAGE_TAG}" \
+                "${BWA_BIN}" index "${EXT_REF_FASTA}"
+            ;;
+        singularity | apptainer)
+            SINGULARITY_BINDS=(--bind "${OUTPUT_DIR}:${OUTPUT_DIR}")
+            [[ -n "${EXTRA_MOUNT}" ]] && SINGULARITY_BINDS+=(--bind "${EXTRA_MOUNT}:${EXTRA_MOUNT}")
+            echo "+ ${RUNTIME} exec ${SINGULARITY_BINDS[*]} ${SIF_PATH} ${BWA_BIN} index ${EXT_REF_FASTA}"
+            "${RUNTIME}" exec \
+                "${SINGULARITY_BINDS[@]}" \
+                "${SIF_PATH}" \
+                "${BWA_BIN}" index "${EXT_REF_FASTA}"
+            ;;
+    esac
+
+    if ! extended_reference_is_indexed "${EXT_REF_FASTA}"; then
+        echo "ERROR: ${EXT_REF_FASTA} still lacks one of .sa, .ann or .bwt after bwa index -" >&2
+        echo "       check the output above for the actual failure and re-run." >&2
+        exit 1
+    fi
+fi
+
+# --------------------------------------------------------------------------
+# 8. Verify the result, then print what to hand the pipeline.
+# --------------------------------------------------------------------------
+
 # Advisory only: these are the files HLA-LA.pl itself looks for at typing
 # time, so flagging them now beats a confusing failure on the first real
 # sample. Not fatal, because the exact file set differs between the graph
-# packages HLA-LA publishes, and serializedGRAPH above is the check that
-# actually proves indexing succeeded.
+# packages HLA-LA publishes, and the serializedGRAPH and bwa-index checks above
+# are the ones that actually prove indexing succeeded.
 for expected in sequences.txt knownReferences extendedReferenceGenome; do
     if [[ ! -e "${GRAPH_DIR}/${expected}" ]]; then
         echo "WARNING: ${GRAPH_DIR}/${expected} is missing. HLA-LA.pl checks for it when typing," >&2
