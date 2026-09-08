@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Download a published HIBAG pre-fit model covering all seven classical HLA
+# loci (A, B, C, DRB1, DQA1, DQB1, DPB1), for use with --hibag_model.
+#
+# The model bundled with the HIBAG R package - and vendored as this repo's test
+# fixture - contains HLA-A only, so a run using it reports HLA-A and nothing
+# else. This step fetches the real thing.
+#
+# These are the "HLARES" parameter estimates of Zheng et al. (2014), built from
+# SNP markers common to the Illumina 1M Duo, OmniQuad, OmniExpress, 660K and
+# 550K platforms, which is why they suit the OmniExpress test data prepared by
+# 10-prepare-na12878-array-hibag.
+#
+# Useful overrides:
+#   HIBAG_ANCESTRY        European (default), Asian, Hispanic, or African
+#   HIBAG_MODEL_ASSEMBLY  hg19 (default) or hg18
+#   HIBAG_MODEL           full output path, overriding both of the above
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+require_command Rscript "Rscript is required to validate the downloaded HIBAG model."
+
+case "${HIBAG_ANCESTRY}" in
+    European | Asian | Hispanic | African) ;;
+    *)
+        echo "ERROR: HIBAG_ANCESTRY must be one of: European, Asian, Hispanic, African (got '${HIBAG_ANCESTRY}')." >&2
+        exit 1
+        ;;
+esac
+
+case "${HIBAG_MODEL_ASSEMBLY}" in
+    hg18 | hg19) ;;
+    *)
+        echo "ERROR: HIBAG_MODEL_ASSEMBLY must be hg18 or hg19 (got '${HIBAG_MODEL_ASSEMBLY}')." >&2
+        exit 1
+        ;;
+esac
+
+mkdir -p "$(dirname -- "${HIBAG_MODEL}")"
+
+echo "Ancestry: ${HIBAG_ANCESTRY}"
+echo "Assembly: ${HIBAG_MODEL_ASSEMBLY}"
+echo "Target:   ${HIBAG_MODEL}"
+echo
+
+download_file "${HIBAG_MODEL_BASE_URL}/${HIBAG_MODEL_NAME}" "${HIBAG_MODEL}"
+require_file "${HIBAG_MODEL}" "HIBAG model download failed."
+
+# Upstream publishes no checksum for these files, so a known md5 can only tell
+# us the file changed since we last looked - it cannot establish authenticity.
+# Warn and continue; the structural check below is what actually decides
+# whether the file is usable.
+KNOWN_MD5_VAR="HIBAG_MODEL_KNOWN_MD5_${HIBAG_ANCESTRY}_${HIBAG_MODEL_ASSEMBLY}"
+KNOWN_MD5="${!KNOWN_MD5_VAR:-}"
+if [ -n "${KNOWN_MD5}" ] && command -v md5sum >/dev/null 2>&1; then
+    OBSERVED_MD5=$(md5sum "${HIBAG_MODEL}" | cut -d' ' -f1)
+    if [ "${OBSERVED_MD5}" != "${KNOWN_MD5}" ]; then
+        echo "WARNING: md5 differs from the version recorded in lib/config.sh." >&2
+        echo "         recorded: ${KNOWN_MD5}" >&2
+        echo "         observed: ${OBSERVED_MD5}" >&2
+        echo "         Upstream publishes no digest, so this most likely means the file" >&2
+        echo "         was refreshed. Check the contents reported below, then update" >&2
+        echo "         ${KNOWN_MD5_VAR} in testdata-make/lib/config.sh." >&2
+    else
+        echo "md5 matches the recorded value (${KNOWN_MD5})."
+    fi
+fi
+
+echo
+echo "Validating model structure..."
+HIBAG_MODEL="${HIBAG_MODEL}" Rscript --vanilla -e '
+path <- Sys.getenv("HIBAG_MODEL")
+env <- new.env(parent = emptyenv())
+loaded <- load(path, envir = env)
+if (length(loaded) < 1L) stop("model file contains no objects", call. = FALSE)
+obj <- get(loaded[1L], envir = env)
+
+models <- if (inherits(obj, "hlaAttrBagObj")) {
+    stats::setNames(list(obj), obj$hla.locus)
+} else if (is.list(obj) && length(obj) > 0L &&
+           all(vapply(obj, inherits, logical(1L), "hlaAttrBagObj"))) {
+    obj
+} else {
+    stop(sprintf("expected an hlaAttrBagObj or a list of them, got a %s",
+                 paste(class(obj), collapse = "/")), call. = FALSE)
+}
+
+cat(sprintf("  object %s: %d locus/loci\n", loaded[1L], length(models)))
+cat(sprintf("  %-6s %8s %8s %10s\n", "locus", "SNPs", "alleles", "assembly"))
+for (n in names(models)) {
+    m <- models[[n]]
+    cat(sprintf("  %-6s %8d %8d %10s\n", m$hla.locus, length(m$snp.id),
+                length(m$hla.allele), m$assembly))
+}
+assemblies <- unique(vapply(models, function(m) as.character(m$assembly), character(1L)))
+if (length(assemblies) != 1L) {
+    warning("model file mixes assemblies: ", paste(assemblies, collapse = ", "))
+}
+cat(sprintf("\n  Use with: --hibag_model %s --hibag_assembly %s\n", path, assemblies[1L]))
+'
+
+echo
+echo "HIBAG model ready: ${HIBAG_MODEL}"
+cat <<'EOF'
+
+Note on --hibag_match_type: these published models carry accurate positions but
+2012-era rsIDs, many of which have since been merged or retired. Against a
+current Illumina manifest, matching on rsID finds only a few percent of each
+model's SNPs, while 'Pos+Allele' finds ~98%. Use:
+
+    --hibag_match_type Pos+Allele
+
+The pipeline default ('RefSNP+Position') is the right default for a model built
+against your own current manifest, but it is not right for these.
+EOF

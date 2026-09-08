@@ -50,7 +50,8 @@ echo "== Environment =="
     command -v nf-core || true
     command -v nf-test || true
     command -v pre-commit || true
-    echo "Container validation: skipped by early-stage Conda policy"
+    command -v docker || true
+    command -v singularity || command -v apptainer || true
 } | tee "${RUN_DIR}/environment.log"
 
 if command -v nf-core >/dev/null 2>&1; then
@@ -65,8 +66,28 @@ else
     skip_check "nf-test" "nf-test is not installed" "nf-test"
 fi
 
-skip_check "Nextflow test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-test-docker"
-skip_check "Nextflow debug,test,docker profile" "containerized validation is intentionally out of scope for the current early-stage Conda policy" "nextflow-debug-test-docker"
+if command -v docker >/dev/null 2>&1; then
+    run_check "docker info" "docker-info" docker info
+else
+    skip_check "docker info" "docker is not installed" "docker-info"
+fi
+
+if command -v nextflow >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
+    run_check "Nextflow test,docker profile" "nextflow-test-docker" \
+        nextflow run . -profile docker,test --outdir "${RUN_DIR}/docker-test"
+    run_check "Nextflow debug,test,docker profile" "nextflow-debug-test-docker" \
+        nextflow run . -profile debug,test,docker --outdir "${RUN_DIR}/debug-test-docker"
+else
+    skip_check "Nextflow test,docker profile" "nextflow and/or docker is not installed" "nextflow-test-docker"
+    skip_check "Nextflow debug,test,docker profile" "nextflow and/or docker is not installed" "nextflow-debug-test-docker"
+fi
+
+if command -v nextflow >/dev/null 2>&1 && { command -v singularity >/dev/null 2>&1 || command -v apptainer >/dev/null 2>&1; }; then
+    run_check "Nextflow test,singularity profile" "nextflow-test-singularity" \
+        nextflow run . -profile singularity,test --outdir "${RUN_DIR}/singularity-test"
+else
+    skip_check "Nextflow test,singularity profile" "nextflow and/or singularity/apptainer is not installed" "nextflow-test-singularity"
+fi
 
 if command -v pre-commit >/dev/null 2>&1; then
     run_check "pre-commit" "pre-commit" pre-commit run --all-files

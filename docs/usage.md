@@ -38,19 +38,44 @@ All columns are mandatory and each `rna_id` may occur only once. Relative file p
 
 For each sample, the pipeline extracts complete pairs overlapping this region, excludes secondary and supplementary alignments, and combines the recovered mates with the supplied FASTQs. An [example RNA samplesheet](../assets/rna_samples.csv) is included.
 
-Each extracted read pair is checked with `validatefastq` before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
+Each extracted read pair is checked with [validatefastq](https://github.com/biopet/validatefastq) before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
+
+`ARCASHLA_VALIDATE_FASTQ` provisions the validator itself, via its own module `environment.yml`/`conda` directive (`bioconda::biopet-validatefastq=0.1.1`) paired with the matching pinned Biocontainers image, resolved automatically under `-profile conda`/`docker`/`singularity`/`apptainer`. Nothing needs to be installed by hand, and no operator-prepared Conda environment is used for this step. Note that the packaged executable is named `biopet-validatefastq` (there is no plain `validatefastq` alias); running the pipeline with no container/Conda profile at all leaves the module unprovisioned and it will fail fast saying so.
 
 Once a sample's extracted reads pass validation, the pipeline runs `arcasHLA genotype` on them, requesting the genes listed in `--arcashla_genes` (a broad default gene list is provided). Per-sample results are written to `arcashla/genotype/<rna_id>.genotype.json` (+ `.log`).
 
 ### arcasHLA genotyping environment
 
-`arcasHLA genotype` is invoked inside a dedicated Conda environment named `arcas-hla`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**: the pipeline does not create it, install packages into it, or build/update its reference at any point. Before running the pipeline with RNA samples, prepare this environment yourself with:
+`ARCASHLA_GENOTYPE` provisions arcasHLA itself via its own module `environment.yml`/`conda` directive (`arcas-hla=0.6.0`, `kallisto=0.44.0` - later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing), resolved automatically by Nextflow under `-profile conda`. No separate operator-prepared Conda environment is needed for this step.
 
-- `arcas-hla=0.6.0`
-- `kallisto=0.44` (later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing)
-- a reference built via `arcasHLA reference` (IMGT/HLA database + kallisto index)
+arcasHLA has no option to point `genotype` at an external reference database at runtime; the reference used is always whichever one exists inside its own install. Rather than have the pipeline build this reference itself (it clones the ~4GB [ANHIG/IMGTHLA](https://github.com/ANHIG/IMGTHLA) database - too slow and network-dependent to do inside every container build or as a first-task surprise), it is prepared once, out of band, and pointed to with a required **`--arcashla_reference_dir`** parameter - the same pattern as `--hlala_graph_dir` for HLA-LA above. `ARCASHLA_GENOTYPE` symlinks this directory into place as its own `dat/ref` at the start of every task; the symlink swap is fast and atomic, so it's redone unconditionally on every task with no locking or "first use" logic.
 
-The pipeline does not support redirecting `arcasHLA genotype` to a different reference at runtime; the reference used is whichever one is built into the `arcas-hla` environment.
+Build the reference once with:
+
+```bash
+scripts/build_image_arcashla.sh              # build the container image, once
+scripts/build_arcashla_reference.sh /path/to/arcashla_reference   # build the reference into it, once
+```
+
+`build_arcashla_reference.sh` runs inside the same container image the pipeline itself uses (so the reference matches the exact pinned `arcas-hla=0.6.0`/`kallisto=0.44.0` versions). It does not just run plain `arcasHLA reference`: as of IMGT/HLA's Release 3.56.0, its large files (including the `hla.dat` this arcasHLA version expects as a plain file) are distributed as separate `.zip` downloads rather than checked into git, which arcasHLA 0.6.0 doesn't know how to handle. Instead, the script clones IMGT/HLA itself and checks out a pinned pre-3.56.0 commit (**IMGT/HLA version 3.52.0** by default, tag `v3.52.0-alpha`, pinned by commit SHA; override with `IMGTHLA_COMMIT`), then runs `arcasHLA reference --rebuild` against that pinned checkout. This also pins the exact HLA database version used, rather than depending on whatever the upstream default branch contains when the script happens to be run. It checks that a real `hla.idx` file was actually produced before finishing (arcasHLA can otherwise fail partway without a clear error).
+
+Version 3.52.0 is the default because it is the IPD-IMGT/HLA version HLApm uses, so arcasHLA's genotype calls and the personalized reference HLApm builds from them share one allele nomenclature. It is not reachable via `arcasHLA reference --version`, whose built-in version-to-commit mapping stops at 3.46.0 - checking the commit out directly, as this script does, is what makes any pre-3.56.0 version available. **If you built a reference with an earlier version of this script, which defaulted to 3.46.0, re-run it to pick up 3.52.0**: the pipeline does not inspect or validate the database version of the directory you pass to `--arcashla_reference_dir`.
+
+Then run the pipeline with:
+
+```bash
+--arcashla_reference_dir /path/to/arcashla_reference
+```
+
+The build needs roughly **15 GB of free space** and network access to `github.com`. It runs under Docker if that image is loaded, otherwise Singularity/Apptainer against the local `.sif`; `RUNTIME=docker|singularity|apptainer` forces one. Under Singularity/Apptainer all of that space is used on the output directory's own filesystem - a `.sif` is read-only at execution time, so the IMGT/HLA checkout cannot live inside the image the way it does in a Docker container's writable layer, and the script instead mounts a writable scratch directory over the image's arcasHLA `dat/` directory. That scratch directory defaults to a temporary `<output-dir>.build.XXXXXX` sibling, removed when the script exits; set `DAT_WORK_DIR` to put it on a different (larger) filesystem, in which case it is left in place. The free-space check runs before the download and can be adjusted with `REQUIRED_GB`. See `scripts/build_arcashla_reference.sh --help` for all override variables.
+
+Under `-profile docker`/`-profile singularity`/`-profile apptainer`, `ARCASHLA_GENOTYPE` uses a container image built from `modules/local/arcashla/genotype/Dockerfile` (just the pinned packages - no reference baked in, for the same reason it isn't built automatically above). Build it once before running with a container profile:
+
+```bash
+scripts/build_image_arcashla.sh
+```
+
+This builds and tags the Docker image as `quay.io/hlarnaseq/arcashla-genotype:0.6.0`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed. It also converts that same image into a local `modules/local/arcashla/genotype/arcashla-genotype.sif` (when `singularity`/`apptainer` is available) for `-profile singularity`/`apptainer`: Singularity/Apptainer has no access to Docker's local image store, and a bare image name is not a filesystem path, so without this `.sif` file Nextflow would otherwise try (and fail) to pull the image from `quay.io` over the network. See `scripts/build_image_arcashla.sh --help` for details and override variables.
 
 ## WGS samplesheet input
 
@@ -67,20 +92,21 @@ WGS_sample_id,WGS_BAM_path,WGS_BAI_path
 NA12878,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam,testdata-make/hlarnases-testdata/wgs/NA12878.chr6_hla.GRCh38.bam.bai
 ```
 
-| Column          | Description                                                                |
-| --------------- | -------------------------------------------------------------------------- |
-| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.  |
-| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.  |
-| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must end in `.bai`. |
+| Column          | Description                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `WGS_sample_id` | WGS sample identifier. This entry is mandatory and cannot contain spaces.                                            |
+| `WGS_BAM_path`  | Path to the WGS BAM file. This entry is mandatory and must end in `.bam`.                                            |
+| `WGS_BAI_path`  | Path to the WGS BAI index. This entry is mandatory and must be named `<BAM file name>.bai` (i.e. end in `.bam.bai`). |
 
 Each row is validated and loaded as a separate WGS sample channel entry. Relative BAM and BAI paths are resolved from the directory containing the WGS samplesheet, the launch directory, or the pipeline project directory. An [example WGS samplesheet](../assets/wgs_samples.csv) has been provided with the pipeline.
 
-When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.tsv`.
-HLA-LA, samtools, and the prepared HLA-LA graph data must already be available in the active runtime environment.
-The pipeline does not download, prepare, or package HLA-LA graph data in this early development stage.
+The index must be named exactly `<BAM file name>.bai` (for example `NA12878.bam` + `NA12878.bam.bai`), not `<BAM base name>.bai`: HLA-LA resolves a BAM's index by appending `.bai` to the BAM path, and will not find an index named otherwise. This is enforced by [`assets/schema_wgs_samples.json`](../assets/schema_wgs_samples.json), so a mismatch fails at samplesheet validation rather than deep inside HLA-LA.
 
-Provide the parent directory containing the prepared graph with `--hlala_graph_dir`.
-The graph name defaults to `PRG_MHC_GRCh38_withIMGT` and can be changed with `--hlala_graph`.
+When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.tsv`.
+HLA-LA itself (and the samtools/bwa/picard tooling it shells out to) is provisioned by the `HLALA_TYPING` module's own `environment.yml`/`conda` directive and matching pinned `container` (`hla-la=1.0.4`), resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. No separate operator-prepared Conda environment is needed for this step.
+
+The prepared HLA-LA **graph**, however, remains a required, separately-prepared input: the pipeline never downloads, builds, or packages HLA-LA graph data (the `hlala/preparegraph` step is deliberately not wired in), the same pattern as `--arcashla_reference_dir` for arcasHLA above.
+Provide the **parent** directory containing the prepared graph with `--hlala_graph_dir`, and the **graph directory's own name** with `--hlala_graph` (defaults to `PRG_MHC_GRCh38_withIMGT`) - i.e. the graph the pipeline uses is `<hlala_graph_dir>/<hlala_graph>`.
 
 ```bash
 nextflow run nf-core/hlarnaseq \
@@ -90,6 +116,162 @@ nextflow run nf-core/hlarnaseq \
     --hlala_graph_dir /path/to/HLA-LA/graphs \
     --outdir ./results
 ```
+
+### Preparing the HLA-LA graph
+
+Prepare the graph once, out of band, with:
+
+```bash
+scripts/build_reference_hlala.sh /path/to/HLA-LA/graphs
+```
+
+This downloads the published PRG graph package (`PRG_MHC_GRCh38_withIMGT`, ~2.25 GB), verifies its md5, extracts it, and then indexes it twice over, inside the same pinned `hla-la:1.0.4` container image `HLALA_TYPING` itself runs - so the graph is indexed by the exact build that will later consume it:
+
+1. `HLA-LA --action prepareGraph`, which produces `serializedGRAPH`; and
+2. `bwa index` over `extendedReferenceGenome/extendedReferenceGenome.fa`.
+
+Unlike arcasHLA's image, this one is public (Biocontainers/Galaxy depot), so there is no companion image-build script: the container is pulled on first use. Docker is used when its daemon is reachable, otherwise Singularity/Apptainer. That image already ships the `bwa` step 2 needs, so nothing extra has to be installed.
+
+**Step 2 is not optional, even though `prepareGraph` does not do it.** The published tarball ships `mapping_PRGonly/referenceGenome.fa` pre-indexed but `extendedReferenceGenome/` with the FASTA alone, and HLA-LA copes by building that bwa index lazily, the first time it maps reads against the extended reference genome - writing it back into the graph directory, next to the FASTA. The pipeline hands `HLALA_TYPING` one shared graph directory for every WGS sample, so with an unindexed graph all the concurrent per-sample tasks find the index missing, all launch the same `bwa index` against the same paths, and they overwrite each other's partial output: all but (at most) one sample fails, hours into the run. Building the index once, up front, removes the race. The pipeline also refuses to start a `--wgs_samples` run against a graph that lacks it, naming this script in the error, rather than letting the race happen.
+
+Budget for it before starting:
+
+- **~29 GB on disk** for the extracted and fully indexed graph (`serializedGRAPH` alone is ~5.5 GB, and the bwa index adds ~5.1 GB on top of the 3 GB extended reference FASTA), plus the 2.25 GB tarball. The script checks free space on the target filesystem up front (override the floor with `REQUIRED_GB`) rather than failing hours in.
+- **A few hours** for `prepareGraph`, and per HLA-LA's own README it "might take up to 40G of memory". The script warns if the machine has less than 40 GB of RAM but still proceeds. `bwa index` adds roughly another hour and is not memory-hungry.
+
+Re-running the script is free: if the graph is already fully indexed - `<output-dir>/<graph>/serializedGRAPH` non-empty **and** the extended reference FASTA's `.sa`/`.ann`/`.bwt` all present - it reports the graph as already built and exits without downloading, extracting, or indexing anything, and that check runs _before_ the download.
+
+Each indexing step is skipped independently when its own output is already in place, so **a graph prepared before this pipeline built the bwa index is repaired by simply re-running the script on the same directory**: it adds the missing index and neither re-downloads the package nor re-runs the multi-hour `prepareGraph`. An interrupted run that already extracted the package likewise resumes at indexing instead of re-downloading.
+
+**To force a full rebuild, delete the graph directory and re-run**; that is deliberately the only supported way, so there is no "force" flag that could half-overwrite an existing graph. `GRAPH_NAME`, `GRAPH_URL`, `GRAPH_MD5`, `TARBALL` (use an already-downloaded copy), `IMAGE_TAG`, `SIF_PATH`, and `REQUIRED_GB` are all overridable - see `scripts/build_reference_hlala.sh --help`.
+
+On success the script prints the exact parameters to pass:
+
+```bash
+--hlala_graph_dir /path/to/HLA-LA/graphs --hlala_graph PRG_MHC_GRCh38_withIMGT
+```
+
+**Limitation: the script fetches and indexes a _published_ graph; it cannot construct one from scratch.** This is not an unfinished feature - building a PRG graph for a newer IMGT/HLA release or for custom loci is not scriptable outside the tool author's own environment. HLA-LA's own `src/Update graphs.txt` documents that workflow as Perl scripts run on the author's Windows laptop, plus the separate older MHC-PRG v1 binary (not shipped in the bioconda `hla-la` package), hardcoded cluster paths, and input files that were never distributed. A newer graph is an upstream request to the HLA-LA authors. The `GRAPH_NAME`/`GRAPH_URL`/`GRAPH_MD5` overrides exist so other _published_ graph packages, an offline mirror, or a future move of the download host work without editing the script.
+
+### Requirement: `--outdir` and the Nextflow work directory must share a filesystem
+
+**When `--wgs_samples` is used, `--outdir` and the Nextflow work directory (`-w`, default `./work`) must be on the same filesystem.** This is a hard requirement, not a recommendation.
+
+HLA-LA's per-sample output directory is published with `mode: 'link'` (hard links) rather than the pipeline's usual `copy` - see the `HLALA_TYPING` entry in `conf/modules.config`. The `HLALA_TYPING` module declares its per-sample output directory as an output alongside individual files inside it, which makes publishing all-or-nothing (Nextflow offers only the directory to `publishDir`, never the nested paths), and publishing everything by copy would duplicate HLA-LA's multi-gigabyte intermediates (`extraction*.bam`, `remapped_with_a.bam`, `R_{1,2,U}.fastq`) for every WGS sample. Hard links make that free.
+
+Hard links cannot cross filesystems, and **Nextflow does not fall back to copying**: if `--outdir` is on a different filesystem than the work directory, the run aborts with
+
+```
+Failed to publish file: /path/to/work/xx/xxxxxx/<sample_id>; to: /path/to/outdir/hlala/<sample_id> [link]
+```
+
+This is easy to hit on HPC, where the normal layout is `--outdir` on shared/project storage and `-w` on fast local scratch. Either put both on the same filesystem, or override the publishing mode in a custom config passed with `-c`:
+
+```groovy title="hlala_copy.config"
+process {
+    withName: 'HLALA_TYPING' {
+        publishDir = [
+            path: { "${params.outdir}/hlala" },
+            mode: 'copy'
+        ]
+    }
+}
+```
+
+Be aware that this reintroduces the multi-gigabyte-per-sample duplication that `'link'` exists to avoid. `'symlink'`/`'rellink'` are cheaper alternatives, but the published results then break as soon as the work directory is cleaned.
+
+## SNP-array samplesheet input (HIBAG)
+
+HIBAG is the alternative to HLA-LA for the genotype-side HLA calls. Instead of typing HLA from WGS alignments, it _imputes_ HLA alleles from GWAS SNP genotypes, so its input is microarray data in PLINK binary format:
+
+```bash
+--array_samples '[path to SNP-array samplesheet file]' --hibag_model '[path to a pre-fit HIBAG model .RData]'
+```
+
+**`--array_samples` and `--wgs_samples` are mutually exclusive.** Both fill the same genotype-side input to the consensus step, so the pipeline fails fast if given both rather than silently picking one.
+
+The SNP-array samplesheet must be a comma-separated file with exactly these columns:
+
+```csv title="array_samples.csv"
+array_sample_id,array_bed_path,array_bim_path,array_fam_path
+NA12878_omniexpress,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bed,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.bim,testdata-make/hlarnases-testdata/array/NA12878.omniexpress.xMHC.hg19.fam
+```
+
+| Column            | Description                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `array_sample_id` | Label for the PLINK **dataset**. Mandatory, cannot contain spaces. See the warning below. |
+| `array_bed_path`  | Path to the PLINK `.bed` genotype file. Mandatory, must end in `.bed`.                    |
+| `array_bim_path`  | Path to the matching `.bim` variant file. Mandatory, must end in `.bim`.                  |
+| `array_fam_path`  | Path to the matching `.fam` sample file. Mandatory, must end in `.fam`.                   |
+
+Relative paths are resolved from the directory containing the samplesheet, the launch directory, or the pipeline project directory, as for the other samplesheets. An [example SNP-array samplesheet](../assets/array_samples.csv) is provided with the pipeline.
+
+### :warning: A row is one PLINK dataset, not one sample
+
+This is the one place where the SNP-array samplesheet behaves differently from the RNA and WGS ones. A PLINK fileset can hold many samples, and HIBAG imputes all of them in a single call, so:
+
+- `array_sample_id` is only a **label** for the dataset. It is used for task tags and output filenames, and nothing else.
+- The sample IDs that reach the consensus step come from the **IID column of the `.fam` file**.
+
+It is therefore the `.fam` IIDs - not `array_sample_id` - that must match the `wgs_sample_id` values in `--sample_key`. If they do not match, the affected individuals simply produce no consensus rows rather than raising an error, so check this first if consensus output looks empty.
+
+### The HIBAG model
+
+`--hibag_model` is **mandatory** whenever `--array_samples` is given, and the pipeline fails fast if it is missing or does not exist.
+
+The file must be an `.RData` holding either a single `hlaAttrBagObj` or a named list of them, one per HLA locus - the shape the published HIBAG per-platform models use. Pick a model built for your array platform and genome assembly; the pipeline never trains one. By default every locus in the model file is predicted; restrict that with `--hibag_loci 'A,B,C'`.
+
+Set `--hibag_assembly` (`hg18`/`hg19`/`hg38`, default `hg19`) to the assembly of your **genotypes**, and make sure the model was built on the same one.
+
+### :warning: If HIBAG reports that no SNPs match
+
+The most common failure is a model whose SNP coordinates do not line up with your array manifest. HIBAG's own error for this is a bare `There is no overlapping of SNPs!`, so the pipeline checks the overlap first and fails with something you can act on:
+
+```text
+HLA-A: none of the model's 266 SNPs match the array data under --match-type 'RefSNP+Position'.
+    SNPs found under each criterion:
+      Position         0 of 266 model SNPs
+      Pos+Allele       0 of 266 model SNPs
+      RefSNP+Position  0 of 266 model SNPs
+      RefSNP           264 of 266 model SNPs
+    Try --match-type with one of: RefSNP.
+```
+
+Set `--hibag_match_type` to whichever criterion the message says will work. The default is the strict `RefSNP+Position`, which is correct when the model and the genotypes were built against the same manifest and assembly. `RefSNP` matches on rsID alone and is the usual fix for a coordinate offset. If _no_ criterion matches anything, the model and the data are on different assemblies, or the array does not cover the xMHC.
+
+`--hibag_min_prob` (default `0`, i.e. no filtering) drops calls whose posterior probability falls below the threshold. The default matches the HLA-LA path, which applies no confidence filter either.
+
+### :warning: Partial SNP overlap is rejected, not warned about
+
+HIBAG does **not** fail when only some of a model's SNPs are found. It returns confident-looking alleles computed from whatever matched, and they can simply be wrong. Observed against a published model whose rsIDs had gone stale: at 13 of 273 matched SNPs it reported a homozygous `C*07:01`/`C*07:01`, where the same data and model at 271 of 273 gave the correct `C*01:02`/`C*07:01`.
+
+`--hibag_min_matched_snps` (default `0.5`) therefore fails the run when fewer than that fraction of a locus's model SNPs are found, with the same diagnostic table as the zero-overlap error. The per-locus matched fraction is logged for every run and recorded in `<array_sample_id>.hibag_posterior.tsv` as `n_model_snps` / `n_matched_snps`.
+
+Set it to `0` to disable the check, only if you accept unreliable calls.
+
+### Getting a multi-locus model
+
+The model bundled with the HIBAG R package covers **HLA-A only**, so a run using it reports one locus. For the test data, `testdata-make/11-download-hibag-model` fetches a published model covering A, B, C, DRB1, DQA1, DQB1 and DPB1:
+
+```bash
+testdata-make/11-download-hibag-model
+```
+
+These are the "HLARES" parameter estimates of Zheng et al. (2014), built from SNP markers common to the Illumina 1M Duo, OmniQuad, OmniExpress, 660K and 550K platforms. Four ancestries are published (`HIBAG_ANCESTRY`: European, Asian, Hispanic, African) in hg18 and hg19 (`HIBAG_MODEL_ASSEMBLY`); European/hg19 is the default and is the right one for NA12878.
+
+They carry accurate hg19 positions but 2012-era rsIDs, many of which have since been merged or retired, so they need `--hibag_match_type Pos+Allele` — rsID matching finds only a few percent of each model's SNPs. `pipeline_testdata_run.sh` sets this for you.
+
+### HIBAG dependency
+
+`HIBAG_PREDICT` follows the standard nf-core pattern: its dependency is declared once in [`modules/local/hibag/predict/environment.yml`](../modules/local/hibag/predict/environment.yml) (`bioconda::bioconductor-hibag=1.42.0`), which feeds both the module's `conda` directive and a matching pinned Biocontainers/Galaxy-depot `container` directive. Run the SNP-array path with one of `-profile conda`, `-profile docker`, `-profile singularity` or `-profile apptainer` and Nextflow provisions HIBAG for you.
+
+The package is deliberately **not** listed in [`envs/nf-core.yml`](../envs/nf-core.yml), so nothing here depends on `HIBAG` being installed in the environment you launch Nextflow from. Running with none of those profiles fails at this step with an explicit message naming the profiles to use, rather than silently imputing with whatever version happens to be on the host.
+
+The pin is 1.42.0 rather than the newer 1.46.0 because 1.42.0 is the most recent release for which the Galaxy depot publishes a Singularity image, so a single version covers all four profiles.
+
+### Preparing SNP-array test data
+
+`testdata-make/10-prepare-na12878-array-hibag` downloads the NA12878 / GM12878 Illumina HumanOmniExpress-24 v1.0 array data from GEO and converts it to the PLINK genotypes this step consumes. See [`testdata-make/README.md`](../testdata-make/README.md) for what the conversion does and its limitations.
 
 ## RNA/WGS sample key input
 
@@ -106,10 +288,10 @@ rnaseq_sample_id,wgs_sample_id
 RNA_SAMPLE_1,WGS_SAMPLE_1
 ```
 
-| Column             | Description                                                          |
-| ------------------- | --------------------------------------------------------------------- |
-| `rnaseq_sample_id`  | RNA sample identifier; must match a `rna_id` from `--rna_samples`.     |
-| `wgs_sample_id`     | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
+| Column             | Description                                                               |
+| ------------------ | ------------------------------------------------------------------------- |
+| `rnaseq_sample_id` | RNA sample identifier; must match a `rna_id` from `--rna_samples`.        |
+| `wgs_sample_id`    | WGS sample identifier; must match a `WGS_sample_id` from `--wgs_samples`. |
 
 One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file (or, when `--wgs_samples` is not provided at all, every RNA sample) is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample. A `--sample_key` file with zero data rows is valid and simply routes every RNA sample through the `RNA_ONLY:<rna_id>` fallback.
 
@@ -126,23 +308,31 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 `HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided, regardless of whether `--wgs_samples` is also provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
 
-`--hlapm_repo` is **mandatory** whenever `--rna_samples` is provided (mirroring the existing `--hlala_graph_dir` requirement above), independent of `--wgs_samples`: the pipeline fails fast with a clear error if it is missing or does not exist, rather than silently skipping the step.
-
-```bash
---hlapm_repo '[path to a local HLApm checkout]'
-```
-
-`--hlapm_repo` must point to a local, pre-cloned checkout of [davenportlab/HLApm](https://github.com/davenportlab/HLApm) (including its bundled `data/references/` files). The pipeline never clones or fetches HLApm at runtime; the checkout must already exist at this path before the pipeline runs.
-
 `--hlapm_allowed_loci` (default `A,B,C,DRB1,DQA1,DQB1,DPA1,DPB1,DOA,DOB,G,E,F`) is a comma-separated allow-list of HLA loci (without the `HLA-` prefix) to include when building the HLApm input. `HLA_CONSENSUS` output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs; no separate audit/log file is written for excluded loci. This default is restricted to the loci HLApm's own per-allele locus regex can reliably parse — passing other loci through can crash the underlying R script.
 
-### HLApm Conda environment
+### HLApm container
 
-Building the personalized reference is invoked inside a dedicated Conda environment named `hlapm`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/HLA-LA sections above: the pipeline does not create it, install packages into it, or update the HLApm checkout at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+`HLAPM_BUILD_REF` follows the standard nf-core pattern for its R dependencies: they are declared once in [`modules/local/hlapm/build_ref/environment.yml`](../modules/local/hlapm/build_ref/environment.yml) (`r-base`, `data.table`, `dplyr`, `stringr`, `seqinr`, `Biostrings`, `rtracklayer`, `DECIPHER`, `bedtools`), which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm` Conda environment is gone; nothing needs to be created by hand for the R side.
 
-- R >= 4.1.0
-- CRAN packages `data.table`, `dplyr`, `stringr`, `seqinr`
-- Bioconductor packages `Biostrings`, `rtracklayer`, `DECIPHER`
+HLApm itself is different. It is an unpackaged lab git repository rather than a Conda package, so it cannot be installed from `environment.yml` and reaches the module one of two ways:
+
+- **Container profiles** (`-profile docker`/`singularity`/`apptainer`) — the image bakes in HLApm at pinned commit `38faa6087bbd827ccab969d947f8df101e95d688`, including its bundled `data/references/` files. Build it once before running:
+
+  ```bash
+  scripts/build_image_hlapm.sh
+  ```
+
+  This builds and tags the Docker image as `quay.io/hlarnaseq/hlapm-build-ref:38faa60`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed, and converts that same image into a local `modules/local/hlapm/build_ref/hlapm-build-ref.sif` (when `singularity`/`apptainer` is available) for `-profile singularity`/`apptainer`, for the same reason described for arcasHLA above. The build needs network access to `github.com` (for the HLApm clone) and to the Conda channels. Override the baked-in HLApm version with `HLAPM_COMMIT=<sha>` — see `scripts/build_image_hlapm.sh --help`.
+
+- **`-profile conda`, or no profile at all** — `--hlapm_repo` is **mandatory**, and the pipeline fails fast at launch with a clear error if it is missing or does not exist, rather than failing partway through the run:
+
+  ```bash
+  --hlapm_repo '[path to a local HLApm checkout]'
+  ```
+
+  It must point to a local, pre-cloned checkout of [davenportlab/HLApm](https://github.com/davenportlab/HLApm), including its bundled `data/references/` files. The pipeline never clones or fetches HLApm at runtime; the checkout must already exist at this path before the pipeline runs.
+
+Under a container profile `--hlapm_repo` remains available but **optional**: passing it overrides the baked-in checkout with your own (e.g. a patched or newer HLApm) without rebuilding the image. The override is staged into the task as an input, so it is mounted into the container automatically — no manual bind-mount options are needed. Either way, `versions.yml` reports which HLApm commit was actually used: the pinned commit from the image, or the override checkout's `git rev-parse HEAD`.
 
 ### HLApm STAR index
 
@@ -168,27 +358,57 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
 
 Immediately after alignment, each per-`(RNA sample, allele)` coordinate-sorted BAM (`STAR_ALIGN`'s own output, above) is additionally queryname-sorted with [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) (`samtools sort -n`); `STAR_ALIGN`'s coordinate-sorted BAM is unchanged and continues to be published as before. Once every distinct allele's GTF (from HLApm STAR index, above) has been concatenated into one cohort-wide `combined.gtf` (comment lines stripped), the pipeline runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of per-allele queryname-sorted BAMs plus the combined GTF. For each read, this script assigns it to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing `<rna_id>.edit_distance.tsv` (one row per read, with a `unique`/`best`/`ambiguous` confidence label) plus a `<rna_id>.stat.txt` run-statistics log. See [output docs](output.md#hlapm-read-quantification) for the resulting `hlapm/quantify/` layout.
 
-Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_distance.tsv`, the pipeline runs a new `HLAPM_SUMMARIZE_READCOUNTS` step over that same table, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script). For each RNA sample, it keeps only non-`ambiguous` reads whose winning-gene edit distance is at or below `--hlapm_quantify_max_edit_distance` (default `16`, matching the source script's hardcoded threshold), then counts the surviving reads per gene, producing `<rna_id>.HLA_gene_summary.tsv` (columns: `gene_name`, `n_reads_mapping`). This closes the "stops at the per-read table" gap left open by the earlier iteration; it runs inside the same `hlapm-quantify` Conda environment as `make_a_table_210804_allHLAgenes.py` (see below).
+Immediately after `make_a_table_210804_allHLAgenes.py` writes `<rna_id>.edit_distance.tsv`, the pipeline runs a new `HLAPM_SUMMARIZE_READCOUNTS` step over that same table, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script). For each RNA sample, it keeps only non-`ambiguous` reads whose winning-gene edit distance is at or below `--hlapm_quantify_max_edit_distance` (default `16`, matching the source script's hardcoded threshold), then counts the surviving reads per gene, producing `<rna_id>.HLA_gene_summary.tsv` (columns: `gene_name`, `n_reads_mapping`). This closes the "stops at the per-read table" gap left open by the earlier iteration; it runs from the [shared data-tools container](#shared-data-tools-container) rather than alongside `make_a_table_210804_allHLAgenes.py`'s Python 2 environment (see below).
 
 `--hlapm_quantify_max_edit_distance` (default `16`) is passed straight through to this step as the maximum summed-mate edit distance (NM) a read may have and still count toward its assigned gene's read count.
 
-Per-allele-level read counts and a cross-sample combined gene-count table remain out of scope for this iteration. A whole-genome `featureCounts` gene-count table is now produced independently (see [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts), below); `<rna_id>.edit_distance.tsv` (above, not the `HLA_gene_summary.tsv` produced here) is reconciled against the HLA-region-restricted half of that whole-genome work in [HLA read-count reconciliation diff table](#hla-read-count-reconciliation-diff-table), below.
+Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
 
-#### `hlapm-quantify` Conda environment
+#### HLApm read-quantification container
 
-Running `make_a_table_210804_allHLAgenes.py` and `summarize_hla_readcounts.R` are both invoked inside a dedicated Conda environment named `hlapm-quantify`, separate from the pipeline's main runtime environment. This environment is an **operator-prepared precondition**, worded like the `arcas-hla`/`hlapm` sections above: the pipeline does not create it or install packages into it at any point. Before running the pipeline with `--rna_samples` (and therefore `--sample_key`), prepare this environment yourself with:
+`HLAPM_QUANTIFY_READS` provisions its own dependencies from
+[`modules/local/hlapm/quantify_reads/environment.yml`](../modules/local/hlapm/quantify_reads/environment.yml),
+which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm-quantify` Conda environment is gone; nothing needs to be created by hand.
 
-- Python 2
-- `pybam` (`pip install https://github.com/JohnLonginotto/pybam/zipball/master`)
-- `intervaltree` (PyPI)
-- R (>= 4.0, matching the `hlapm` env's floor)
-- CRAN packages `dplyr`, `tidyr`
+`make_a_table_210804_allHLAgenes.py` is unmodified legacy code, so this environment is a deliberately frozen **Python 2.7.15** (the newest Python 2 conda-forge ships) plus:
 
-For example:
+- `pybam`, pinned by commit `846d98603905c57c31bf7b9abaf2eb8c89899e60` - it is a GitHub-only package with no releases, tags or PyPI presence, so a commit SHA is the only reproducible handle on a version;
+- `intervaltree` 3.1.0. The script prefers `quicksect` and falls back to `intervaltree`; `quicksect` is deliberately **not** installed, so the script keeps taking the `intervaltree` branch that every result this pipeline has produced so far came from.
+
+Python 2 has been end of life since 2020 and receives no security updates. Freezing it inside a container, rather than asking operators to maintain a Python 2 environment, is precisely the point of this image; porting the script to Python 3 is the real fix and is a separate, much larger piece of work.
+
+Build the image once before running with a container profile:
 
 ```bash
-mamba install -n hlapm-quantify -c conda-forge r-base r-dplyr r-tidyr
+scripts/build_image_hlapm_quantify.sh
 ```
+
+This builds and tags the Docker image as `quay.io/hlarnaseq/hlapm-quantify-reads:py2.7.15`, matching `nextflow.config`'s `docker.registry`/`singularity.registry = 'quay.io'` default so `-profile docker` finds it locally with no registry push needed, and converts it into a local `modules/local/hlapm/quantify_reads/hlapm-quantify-reads.sif` for `-profile singularity`/`apptainer`. The build needs network access to the Conda channels, PyPI and `github.com`. Override the pinned pybam commit with `PYBAM_COMMIT=<sha>` - see `scripts/build_image_hlapm_quantify.sh --help`, and note that `-profile conda` reads the pin from `environment.yml`, so change both to keep those two paths in step.
+
+Under `-profile conda` the same `environment.yml` is used, which means Conda needs PyPI and `github.com` access the first time it creates that environment - `pybam` and `intervaltree` are `pip:` entries, outside Conda's solver.
+
+#### Shared data-tools container
+
+Four modules do not wrap a bioinformatics tool at all - they run this repository's own small analysis scripts from `bin/`:
+
+| Module                       | Script                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `HLA_CONSENSUS`              | `call_hla_consensus.py` (python3, pandas)                                |
+| `HLAPM_PREPARE_INPUT`        | `consensus_to_hlapm.py` (python3)                                        |
+| `ARCASHLA_COMBINE`           | `combine_arcashla_genotypes.R` (jsonlite, dplyr, tibble, stringr, purrr) |
+| `HLAPM_SUMMARIZE_READCOUNTS` | `summarize_hla_readcounts.R` (dplyr, tidyr)                              |
+
+All four share one environment, [`containers/datatools/environment.yml`](../containers/datatools/environment.yml), and one image built from it. Unlike every other environment file here it is not module-local, because four near-identical copies of an overlapping package list would drift apart; see [`containers/datatools/README.md`](../containers/datatools/README.md).
+
+Build it once before running with a container profile:
+
+```bash
+scripts/build_image_datatools.sh
+```
+
+This builds `quay.io/hlarnaseq/datatools:1.0` and the local `containers/datatools/datatools.sif`, following the same local-image pattern as the other images described above. Under `-profile conda`, Nextflow creates the one environment and all four modules share it.
+
+Package versions are pinned to those the pipeline's existing published results were produced with, so containerizing these steps changes no output. Running any of these four modules with no `-profile conda`/`docker`/`singularity`/`apptainer` now fails fast with a message naming those profiles, instead of silently using whichever `python3`/`Rscript` happens to be on the host `PATH` - the same trade already made for `ARCASHLA_EXTRACT`, `HIBAG_PREDICT` and `HLAPM_BUILD_REF`.
 
 ## Whole-genome common-reference gene counts
 
@@ -246,7 +466,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-This early-stage pipeline expects samtools and validatefastq to be available in the active Conda environment, and a separate, dedicated `arcas-hla` Conda environment to be prepared as described above for arcasHLA genotyping.
+MHC extraction (samtools), read-pair validation, and arcasHLA genotyping each provision their own tools: every one of those steps declares its own `environment.yml`/`conda` directive and a matching pinned `container`, resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. In particular, samtools no longer has to be installed by hand in the active Conda environment; running with none of those profiles fails with an explicit message naming the missing tool. Other steps — notably the HLApm R/Python steps — still expect their tools in an operator-prepared environment, as described above.
 
 > [!NOTE]
 > `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.

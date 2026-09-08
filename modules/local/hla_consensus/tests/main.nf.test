@@ -1,0 +1,97 @@
+nextflow_process {
+
+    name "Test Process HLA_CONSENSUS"
+    script "../main.nf"
+    process "HLA_CONSENSUS"
+    tag "modules"
+    tag "modules_local"
+    tag "hla_consensus"
+
+    // HIBAG_COMBINE reproduces HLALA_COMBINE's output contract exactly, so the
+    // consensus step must not be able to tell them apart. The two fixtures
+    // carry the same genotypes and differ only in allele resolution: HLA-LA
+    // emits G-groups (A*02:01:01G), HIBAG emits two fields (A*02:01), and
+    // --truncate-fields 2 collapses both to 02:01.
+    //
+    // Both tests below assert the SAME expected consensus, which is what makes
+    // them a genuine interchangeability check rather than two unrelated
+    // smoke tests.
+    //
+    // Alleles are compared as sorted sets: call_hla_consensus.py joins each
+    // allele set straight out of a Python frozenset, so the order within a row
+    // varies between runs of identical input. That non-determinism is
+    // pre-existing and unrelated to which caller produced the input.
+
+    def EXPECTED_CONSENSUS = [
+        'RNA_ONLY:rna4\tHLA-A\t1\twgs_id_missing\t24:02',
+        'RNA_ONLY:rna4\tHLA-B\t1\twgs_id_missing\t15:01,51:01',
+        'wgs1\tHLA-A\t4\twgs_id_exist|rna_consistent|wgs_alleles_exist|wgs_rna_match\t02:01,03:01',
+        'wgs1\tHLA-B\t4\twgs_id_exist|rna_consistent|wgs_alleles_exist|wgs_rna_match\t07:02,08:01',
+        'wgs2\tHLA-A\t4\twgs_id_exist|rna_consistent|wgs_alleles_exist|wgs_rna_match\t01:01,02:01',
+        'wgs2\tHLA-B\t3\twgs_id_exist|rna_consistent|wgs_alleles_missing\t44:02'
+    ]
+
+    // Sort the comma-joined allele set in the last column so the comparison
+    // does not depend on frozenset iteration order.
+    def normalise = { path ->
+        file(path).text.readLines().drop(1).findAll { it.trim() }.collect { line ->
+            def fields = line.split('\t', -1)
+            fields[-1] = fields[-1].split(',').sort().join(',')
+            fields.join('\t')
+        }.sort()
+    }
+
+    test("derives the expected consensus from HLA-LA genotype calls") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                hla_consensus_truncate_fields = 2
+            }
+            process {
+                """
+                input[0] = file("\${projectDir}/tests/fixtures/hla_consensus/arcashla_combined.csv", checkIfExists: true)
+                input[1] = file("\${projectDir}/tests/fixtures/hla_consensus/HLA-LA_combined.tsv", checkIfExists: true)
+                input[2] = file("\${projectDir}/tests/fixtures/hla_consensus/sample_key.csv", checkIfExists: true)
+                input[3] = file("\${projectDir}/assets/NO_FILE", checkIfExists: true)
+                input[4] = file("\${projectDir}/assets/NO_FILE", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert normalise(process.out.consensus[0]) == EXPECTED_CONSENSUS.sort()
+        }
+    }
+
+    test("derives the same consensus from an equivalent HIBAG_COMBINE file") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+                hla_consensus_truncate_fields = 2
+            }
+            process {
+                """
+                input[0] = file("\${projectDir}/tests/fixtures/hla_consensus/arcashla_combined.csv", checkIfExists: true)
+                input[1] = file("\${projectDir}/tests/fixtures/hibag/HIBAG_combined.tsv", checkIfExists: true)
+                input[2] = file("\${projectDir}/tests/fixtures/hla_consensus/sample_key.csv", checkIfExists: true)
+                input[3] = file("\${projectDir}/assets/NO_FILE", checkIfExists: true)
+                input[4] = file("\${projectDir}/assets/NO_FILE", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            assertAll(
+                // Identical to the HLA-LA run above: same individuals, same
+                // consensus levels, same labels, same alleles.
+                { assert normalise(process.out.consensus[0]) == EXPECTED_CONSENSUS.sort() },
+                { assert file(process.out.summary[0]).text.contains('HLA-A') }
+            )
+        }
+    }
+}

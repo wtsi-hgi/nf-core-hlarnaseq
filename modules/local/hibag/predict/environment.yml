@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: HIBAG_PREDICT tool environment.
+#
+# bioconductor-hibag is the Bioconda packaging of the HIBAG R package, which is
+# the only non-base dependency of bin/hibag_predict.R (`library(HIBAG)` is its
+# single import - no optparse, no tidyverse). One package is therefore enough:
+# this module needs neither a mulled multi-package image nor a module-local
+# Dockerfile the way ARCASHLA_GENOTYPE does.
+#
+# The pin is 1.42.0 rather than the newer 1.46.0 because 1.42.0 is the latest
+# release mirrored on the Galaxy depot as a Singularity image
+# (bioconductor-hibag:1.46.0--r45ha27e39d_0 is 404 there at the time of
+# writing). Pinning 1.42.0 means one version covers conda, Docker, Singularity
+# and Apptainer alike; a 1.46.0 pin would leave the Singularity branch of the
+# container directive dangling.
+#
+# r-base is deliberately NOT restated here: the Bioconda recipe already pins
+# the R version it was built against, and repeating that constraint would risk
+# drifting from whatever the package actually requires.
+#
+# This one file backs both the `conda` directive and (via the Bioconda recipe
+# the Biocontainers image is auto-built from) the `container` directive in
+# main.nf - the standard nf-core pattern. No `procps-ng` entry is needed: the
+# Biocontainers image already ships `ps`, which Nextflow runs inside every
+# container to collect task trace metrics.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioconda::bioconductor-hibag=1.42.0

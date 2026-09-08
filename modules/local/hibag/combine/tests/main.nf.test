@@ -1,0 +1,74 @@
+nextflow_process {
+
+    name "Test Process HIBAG_COMBINE"
+    script "../main.nf"
+    process "HIBAG_COMBINE"
+    tag "modules"
+    tag "modules_local"
+    tag "hibag_combine"
+
+    test("merges per-dataset calls into one sorted file with a single header") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of([
+                    file("\${projectDir}/tests/fixtures/hibag/combine/dataset_b.hibag_calls.tsv", checkIfExists: true),
+                    file("\${projectDir}/tests/fixtures/hibag/combine/dataset_a.hibag_calls.tsv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def lines = file(process.out.csv[0]).text.readLines()
+
+            assertAll(
+                { assert lines[0] == 'sample_id\tLocus\tHLA_allele' },
+                // One header only, both bodies kept: 2 samples x 2 loci x 2 alleles.
+                { assert lines.size() == 9 },
+                { assert lines.count { it.startsWith('sample_id\t') } == 1 },
+                // Sorted by sample, then locus, then allele, regardless of the
+                // order the input files were staged in.
+                { assert lines.drop(1) == lines.drop(1).sort() },
+                { assert lines[1] == 'SAMPLE_A\tA\tA*01:01' },
+                { assert lines.drop(1).any { it.startsWith('SAMPLE_B\t') } },
+                { assert lines.drop(1).every { it.split('\t').size() == 3 } },
+                { assert lines.drop(1).every { it.split('\t')[2].contains('*') } }
+            )
+        }
+    }
+
+    test("produces a header-only file when the inputs carry no calls") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+            process {
+                """
+                input[0] = Channel.of([
+                    file("\${projectDir}/tests/fixtures/hibag/combine/dataset_empty.hibag_calls.tsv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def lines = file(process.out.csv[0]).text.readLines()
+
+            assertAll(
+                // Same shape as assets/NO_WGS_HLALA_COMBINED.tsv, which
+                // call_hla_consensus.py already handles.
+                { assert lines == ['sample_id\tLocus\tHLA_allele'] }
+            )
+        }
+    }
+}

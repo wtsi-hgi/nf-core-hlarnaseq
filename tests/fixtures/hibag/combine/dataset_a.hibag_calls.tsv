@@ -1,0 +1,5 @@
+sample_id	Locus	HLA_allele
+SAMPLE_A	A	A*01:01
+SAMPLE_A	A	A*11:01
+SAMPLE_A	B	B*08:01
+SAMPLE_A	B	B*56:01

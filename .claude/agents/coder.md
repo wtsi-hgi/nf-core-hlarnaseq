@@ -13,4 +13,4 @@ Follow `AGENTS.md` and the `implement-nfcore-nextflow` skill exactly:
 - Implement only the approved scope; keep the diff small and reviewable.
 - Update coordinated files (schema, docs, tests, CITATIONS.md) when behavior changes.
 - Save implementation notes to `artifacts/2_implement.md`.
-- Do not create, build, pull, or run containers. Do not commit.
+- Container creation, building, pulling, and running (Docker, Singularity, Apptainer) are permitted; prefer pairing each module's `conda` `environment.yml` with a matching `container` directive per nf-core convention. Do not commit.

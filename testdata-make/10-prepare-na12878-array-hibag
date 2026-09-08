@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Download the NA12878 / GM12878 Illumina HumanOmniExpress-24 v1.0 SNP-array
+# data from GEO (GSE96790) and convert it into PLINK BED/BIM/FAM genotypes for
+# HIBAG HLA imputation.
+#
+# The Nexus FinalReport carries no genotype calls -- only Log R Ratio, B Allele
+# Freq, GC Score and the A/B allele pair -- so genotypes are derived from the
+# BAF clusters. See lib/finalreport_to_plink.py and the written .log file.
+#
+# The IDATs are downloaded for provenance only. Genotyping them would require
+# the licensed humanomniexpress-24v1-0_a.bpm manifest, an EGT cluster file and
+# Illumina's iaap-cli/GenomeStudio, none of which are available here.
+#
+# Useful overrides:
+#   INCLUDE_REPLICATE=1  also fetch GSM2544146, the second technical replicate
+#   INCLUDE_IDAT=0       skip the IDAT downloads (~10 MB per sample)
+#   ARRAY_REGION=all     keep every SNP instead of the xMHC subset
+
+TESTDATA_MAKE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+. "${TESTDATA_MAKE_DIR}/lib/config.sh"
+. "${TESTDATA_MAKE_DIR}/lib/functions.sh"
+
+require_command python3 "python3 is required to convert the FinalReport to PLINK format."
+
+# gsm<TAB>array_position<TAB>report_index<TAB>sample_id
+SAMPLES=("GSM2544145	9721380046_R03C01	1	${ARRAY_SAMPLE_ID}")
+if [ "${INCLUDE_REPLICATE}" = "1" ]; then
+    SAMPLES+=("GSM2544146	9721380046_R05C01	2	${ARRAY_SAMPLE_ID}_rep2")
+fi
+
+mkdir -p "${ARRAY_DIR}" "${ARRAY_FINAL_REPORT_DIR}" "${ARRAY_HIBAG_DIR}"
+if [ "${INCLUDE_IDAT}" = "1" ]; then
+    mkdir -p "${ARRAY_IDAT_DIR}"
+fi
+
+# GEO lays samples out as <base>/GSM2544nnn/GSM2544145/suppl/<file>
+geo_url() {
+    printf '%s/%snnn/%s/suppl/%s\n' "${ARRAY_GEO_BASE_URL}" "${1:0:7}" "${1}" "${2}"
+}
+
+printf 'gsm\tplatform\tarray_position\tfile_type\tfilename\n' >"${ARRAY_MANIFEST}"
+
+REPORT_PATHS=()
+SAMPLE_IDS=()
+
+for entry in "${SAMPLES[@]}"; do
+    IFS=$'\t' read -r GSM ARRAY_POS REPORT_INDEX SAMPLE_ID <<<"${entry}"
+
+    REPORT_NAME="${GSM}_${ARRAY_REPORT_PLATFORM}_NexusFinalReport${REPORT_INDEX}.txt.gz"
+    GRN_NAME="${GSM}_${ARRAY_POS}_Grn.idat.gz"
+    RED_NAME="${GSM}_${ARRAY_POS}_Red.idat.gz"
+
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "${GSM}" "${ARRAY_PLATFORM}" "${ARRAY_POS}" "FinalReport" "${REPORT_NAME}" \
+        >>"${ARRAY_MANIFEST}"
+    if [ "${INCLUDE_IDAT}" = "1" ]; then
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "${GSM}" "${ARRAY_PLATFORM}" "${ARRAY_POS}" "IDAT_Green" "${GRN_NAME}" \
+            >>"${ARRAY_MANIFEST}"
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "${GSM}" "${ARRAY_PLATFORM}" "${ARRAY_POS}" "IDAT_Red" "${RED_NAME}" \
+            >>"${ARRAY_MANIFEST}"
+    fi
+
+    REPORT_PATH="${ARRAY_FINAL_REPORT_DIR}/${REPORT_NAME}"
+    download_file "$(geo_url "${GSM}" "${REPORT_NAME}")" "${REPORT_PATH}"
+    if [ "${INCLUDE_IDAT}" = "1" ]; then
+        download_file "$(geo_url "${GSM}" "${GRN_NAME}")" "${ARRAY_IDAT_DIR}/${GRN_NAME}"
+        download_file "$(geo_url "${GSM}" "${RED_NAME}")" "${ARRAY_IDAT_DIR}/${RED_NAME}"
+    fi
+
+    require_file "${REPORT_PATH}" "FinalReport download failed for ${GSM}."
+    REPORT_PATHS+=("${REPORT_PATH}")
+    SAMPLE_IDS+=("${SAMPLE_ID}")
+done
+
+echo
+echo "Manifest:"
+column -t -s "$(printf '\t')" "${ARRAY_MANIFEST}" 2>/dev/null || cat "${ARRAY_MANIFEST}"
+
+CONVERT_ARGS=()
+for index in "${!REPORT_PATHS[@]}"; do
+    CONVERT_ARGS+=(--report "${REPORT_PATHS[${index}]}" --sample-id "${SAMPLE_IDS[${index}]}")
+done
+
+echo
+echo "Converting FinalReport to PLINK BED/BIM/FAM..."
+python3 "${TESTDATA_MAKE_DIR}/lib/finalreport_to_plink.py" \
+    "${CONVERT_ARGS[@]}" \
+    --region "${ARRAY_REGION}" \
+    --out-prefix "${ARRAY_PLINK_PREFIX}" \
+    --log "${ARRAY_PLINK_PREFIX}.log"
+
+require_file "${ARRAY_PLINK_PREFIX}.bed" "PLINK BED file was not written."
+require_file "${ARRAY_PLINK_PREFIX}.bim" "PLINK BIM file was not written."
+require_file "${ARRAY_PLINK_PREFIX}.fam" "PLINK FAM file was not written."
+
+echo
+echo "HIBAG genotypes ready: ${ARRAY_PLINK_PREFIX}.{bed,bim,fam}"
+echo "Conversion summary:    ${ARRAY_PLINK_PREFIX}.log"

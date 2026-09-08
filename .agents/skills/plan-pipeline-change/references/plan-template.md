@@ -22,7 +22,10 @@ List each expected file and the reason it will change.
 
 ## nf-core and Dependency Notes
 
-State whether existing nf-core modules/subworkflows will be used. If adding a tool, identify active-Conda environment assumptions, versions reporting, and citation implications. Do not propose container packaging or containerized execution during the current early-stage policy.
+State whether existing nf-core modules/subworkflows will be used. 
+If adding a tool, identify active-Conda environment assumptions 
+(and/or container image, if the module will pair a `conda` directive with a `container` directive 
+per nf-core convention), versions reporting, and citation implications.
 
 ## Data, Parameter, and Output Impact
 

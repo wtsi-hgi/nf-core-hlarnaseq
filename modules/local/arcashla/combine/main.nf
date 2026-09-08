@@ -2,6 +2,13 @@ process ARCASHLA_COMBINE {
     tag "arcasHLA_combined"
     label 'process_single'
 
+    // Shared python3 + R environment, not module-local: see
+    // containers/datatools/README.md.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.0' }"
+
     publishDir "${params.outdir}/arcashla",
         mode: params.publish_dir_mode,
         saveAs: { filename -> filename == 'versions.yml' ? null : filename }
@@ -26,6 +33,14 @@ process ARCASHLA_COMBINE {
     def manifest_file  = workDir.resolve("arcashla_manifest_${UUID.randomUUID()}.tsv")
     manifest_file.text = (manifest_lines + ['']).join('\n')
     """
+    # See HLA_CONSENSUS for why this guard exists: with no
+    # conda/docker/singularity/apptainer profile the task falls back to the
+    # host PATH, and an actionable message beats a bare "command not found".
+    command -v Rscript >/dev/null 2>&1 || {
+        echo "ERROR: Rscript is not available. Run the pipeline with -profile conda, docker, singularity, or apptainer so this module gets the environment declared in containers/datatools/environment.yml." >&2
+        exit 127
+    }
+
     combine_arcashla_genotypes.R ${manifest_file} arcasHLA_combined.csv
 
     cat <<-END_VERSIONS > versions.yml

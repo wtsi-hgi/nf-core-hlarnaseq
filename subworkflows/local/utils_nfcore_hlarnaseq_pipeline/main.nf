@@ -34,6 +34,7 @@ workflow PIPELINE_INITIALISATION {
     outdir            //  string: The output directory where the results will be saved
     rna_samples       //  string: Path to RNA samplesheet
     wgs_samples       //  string: Path to WGS samplesheet
+    array_samples     //  string: Path to SNP-array samplesheet
     sample_key        //  string: Path to RNA/WGS sample key
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
@@ -144,6 +145,32 @@ workflow PIPELINE_INITIALISATION {
     }
 
     //
+    // Create channel from SNP-array samplesheet provided through params.array_samples
+    //
+    // A row is one PLINK dataset, not one sample: HIBAG predicts every sample
+    // in the fileset at once, and the sample IDs that reach HLA_CONSENSUS come
+    // from the .fam IID column rather than from array_sample_id.
+    //
+    if (array_samples) {
+        validateArraySamplesheetHeader(array_samples)
+
+        channel
+            .fromList(samplesheetToList(array_samples, "${projectDir}/assets/schema_array_samples.json"))
+            .map {
+                meta, array_bed_path, array_bim_path, array_fam_path ->
+                    return [
+                        meta,
+                        validateArraySamplesheetFile(array_samples, array_bed_path, "array_bed_path"),
+                        validateArraySamplesheetFile(array_samples, array_bim_path, "array_bim_path"),
+                        validateArraySamplesheetFile(array_samples, array_fam_path, "array_fam_path")
+                    ]
+            }
+            .set { ch_array_samplesheet }
+    } else {
+        ch_array_samplesheet = channel.empty()
+    }
+
+    //
     // Create channel from RNA/WGS sample key provided through params.sample_key
     //
     if (sample_key) {
@@ -154,10 +181,11 @@ workflow PIPELINE_INITIALISATION {
     }
 
     emit:
-    rna_samplesheet = ch_rna_samplesheet
-    wgs_samplesheet = ch_wgs_samplesheet
-    sample_key      = ch_sample_key
-    versions        = ch_versions
+    rna_samplesheet   = ch_rna_samplesheet
+    wgs_samplesheet   = ch_wgs_samplesheet
+    array_samplesheet = ch_array_samplesheet
+    sample_key        = ch_sample_key
+    versions          = ch_versions
 }
 
 /*
@@ -216,8 +244,11 @@ workflow PIPELINE_COMPLETION {
 //
 def validateInputParameters() {
     genomeExistsError()
+    genotypeSourceExclusiveError()
     hlalaGraphDirExistsError()
+    hibagModelExistsError()
     hlapmRepoExistsError()
+    arcashlaReferenceDirExistsError()
     gtfExistsError()
 }
 
@@ -315,6 +346,51 @@ def validateWgsSamplesheetFile(samplesheet, entry, field_name) {
     return resolved_path
 }
 //
+// Validate SNP-array samplesheet header
+//
+def validateArraySamplesheetHeader(samplesheet) {
+    def expected_header = "array_sample_id,array_bed_path,array_bim_path,array_fam_path"
+    def observed_header = file(samplesheet).readLines().find { line -> line.trim() }?.trim()
+
+    if (observed_header != expected_header) {
+        error("Please check SNP-array samplesheet -> Header must be exactly: ${expected_header}")
+    }
+}
+
+//
+// Validate and resolve SNP-array samplesheet file entries
+//
+def validateArraySamplesheetFile(samplesheet, entry, field_name) {
+    def entry_path = file(entry)
+
+    if (entry_path.isAbsolute() && entry_path.exists()) {
+        return entry_path
+    }
+
+    // nf-schema resolves every `format: file-path` samplesheet value against
+    // the launch directory, so a relative entry arrives here already absolute
+    // and wrong whenever the pipeline is launched from outside the repo (which
+    // is what nf-test does). Undo that before searching, exactly as
+    // validateRnaSamplesheetFile does.
+    def launch_path = file(workflow.launchDir)
+    def relative_entry = entry_path.isAbsolute() && entry_path.startsWith(launch_path) ? launch_path.relativize(entry_path) : entry_path
+    def candidate_paths = [
+        file(samplesheet).parent.resolve(relative_entry).normalize(),
+        launch_path.resolve(relative_entry).normalize(),
+        file(projectDir).resolve(relative_entry).normalize()
+    ]
+
+    def resolved_path = candidate_paths.find { candidate -> candidate.exists() }
+
+    if (!resolved_path) {
+        def searched_paths = candidate_paths.collect { candidate -> candidate.toString() }.unique().join(", ")
+        error("Please check SNP-array samplesheet -> ${field_name} does not exist: ${entry}. Searched: ${searched_paths}")
+    }
+
+    return resolved_path
+}
+
+//
 // Validate RNA/WGS sample key header
 //
 def validateSampleKeyHeader(sample_key) {
@@ -353,7 +429,48 @@ def genomeExistsError() {
 }
 
 //
+// Exit pipeline if both genotype-side HLA callers are requested at once
+//
+// HLA-LA (from WGS) and HIBAG (from SNP arrays) both fill the same
+// `sample_id/Locus/HLA_allele` channel feeding HLA_CONSENSUS. Running both
+// would mean silently choosing one, so require the user to choose instead.
+//
+def genotypeSourceExclusiveError() {
+    if (params.wgs_samples && params.array_samples) {
+        error(
+            "--wgs_samples and --array_samples are mutually exclusive.\n" +
+            "  --wgs_samples calls genotype-side HLA alleles from WGS with HLA-LA.\n" +
+            "  --array_samples calls them from SNP-array data with HIBAG.\n" +
+            "  Both feed the same consensus input, so please provide exactly one."
+        )
+    }
+}
+
+//
+// Exit pipeline if SNP-array inputs are provided without a usable HIBAG model
+//
+def hibagModelExistsError() {
+    if (params.array_samples && !params.hibag_model) {
+        error("Please provide --hibag_model when using --array_samples so HIBAG can find its pre-fit model file.")
+    }
+    if (params.hibag_model && !file(params.hibag_model).exists()) {
+        error("Please check --hibag_model -> the HIBAG model file does not exist: ${params.hibag_model}")
+    }
+}
+
+//
 // Exit pipeline if WGS HLA-LA inputs are provided without a prepared graph directory
+//
+// The bwa-index check is a fail-fast for a bug that is otherwise expensive and
+// deeply confusing to hit. HLA-LA bwa-indexes the graph's extended reference
+// genome lazily, on first use, writing the index NEXT TO THE FASTA - i.e. back
+// into the graph directory (BWAmapper::map() -> make_sure_ref_is_indexed(), in
+// HLA-LA's src/mapper/bwa/BWAmapper.cpp). The graph reaches HLALA_TYPING as a
+// single shared `path` input, so every per-sample task sees the same underlying
+// directory: with an unindexed graph, all of them start that same `bwa index`
+// at once and clobber each other, and all but (at most) one sample fails hours
+// into the run. Refusing here, before any task launches, turns that into one
+// line of output and one re-run of scripts/build_reference_hlala.sh.
 //
 def hlalaGraphDirExistsError() {
     if (params.wgs_samples && !params.hlala_graph_dir) {
@@ -363,17 +480,69 @@ def hlalaGraphDirExistsError() {
     if (params.wgs_samples && !file(params.hlala_graph_dir).exists()) {
         error("Please check --hlala_graph_dir -> Directory does not exist: ${params.hlala_graph_dir}")
     }
+
+    if (params.wgs_samples) {
+        // Only the conventional in-graph location is checked. A graph that
+        // redirects its extended reference genome elsewhere with
+        // extendedReferenceGenomePath.txt, or that has none at all, is left
+        // alone rather than guessed at - as are the stub graph directories the
+        // test profiles point at, which have no FASTA here either.
+        def graph_dir = file("${params.hlala_graph_dir}/${params.hlala_graph}")
+        def ext_ref   = graph_dir.resolve('extendedReferenceGenome/extendedReferenceGenome.fa')
+
+        if (!graph_dir.resolve('extendedReferenceGenomePath.txt').exists() && ext_ref.exists()) {
+            // HLA-LA's own definition of "indexed": BWAmapper::ref_is_indexed()
+            // tests exactly these three suffixes.
+            def missing = ['.sa', '.ann', '.bwt'].findAll { suffix ->
+                !graph_dir.resolve("extendedReferenceGenome/extendedReferenceGenome.fa${suffix}").exists()
+            }
+
+            if (missing) {
+                error(
+                    "The HLA-LA graph at ${graph_dir} is not fully prepared: its extended reference\n" +
+                    "genome has no bwa index (missing ${missing.join(', ')} beside extendedReferenceGenome.fa).\n" +
+                    "  HLA-LA would build that index itself, inside every HLALA_TYPING task, writing to the\n" +
+                    "  same shared files - so concurrent WGS samples overwrite each other's index and all but\n" +
+                    "  one fail. Build it once, up front, by re-running:\n" +
+                    "      scripts/build_reference_hlala.sh ${params.hlala_graph_dir}\n" +
+                    "  That adds only the missing index: it neither re-downloads the graph package nor\n" +
+                    "  re-runs the multi-hour prepareGraph step."
+                )
+            }
+        }
+    }
 }
 //
-// Exit pipeline if RNA/sample-key inputs are provided without a prepared HLApm checkout
+// Exit pipeline if RNA/sample-key inputs are provided without any source of HLApm
+//
+// HLApm is an unpackaged git repository, so it can only reach HLAPM_BUILD_REF
+// two ways: baked into the module's container image (built by
+// scripts/build_image_hlapm.sh), or as a checkout passed with --hlapm_repo.
+// The module's environment.yml provides HLApm's R dependencies but cannot
+// provide HLApm itself, so without a container engine --hlapm_repo is still
+// mandatory; with one it is an optional override of the baked-in copy.
+// workflow.containerEngine is null under -profile conda and under no profile
+// at all, which is exactly the set of runs that need a host checkout.
 //
 def hlapmRepoExistsError() {
-    if (params.rna_samples && params.sample_key && !params.hlapm_repo) {
-        error("Please provide --hlapm_repo when using --rna_samples and --sample_key so HLApm can find its prepared repository checkout.")
+    if (params.rna_samples && params.sample_key && !params.hlapm_repo && !workflow.containerEngine) {
+        error("Please provide --hlapm_repo when using --rna_samples and --sample_key without a container profile, so HLApm can find its prepared repository checkout. Alternatively run with -profile docker, singularity, or apptainer, whose image bakes HLApm in (build it once with scripts/build_image_hlapm.sh).")
     }
 
-    if (params.rna_samples && params.sample_key && !file(params.hlapm_repo).exists()) {
+    if (params.rna_samples && params.sample_key && params.hlapm_repo && !file(params.hlapm_repo).exists()) {
         error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
+    }
+}
+//
+// Exit pipeline if RNA inputs are provided without a prepared arcasHLA reference directory
+//
+def arcashlaReferenceDirExistsError() {
+    if (params.rna_samples && !params.arcashla_reference_dir) {
+        error("Please provide --arcashla_reference_dir when using --rna_samples so ARCASHLA_GENOTYPE can find its prepared reference (build one with scripts/build_arcashla_reference.sh).")
+    }
+
+    if (params.rna_samples && !file(params.arcashla_reference_dir).exists()) {
+        error("Please check --arcashla_reference_dir -> Directory does not exist: ${params.arcashla_reference_dir}")
     }
 }
 //
@@ -388,6 +557,7 @@ def gtfExistsError() {
         error("Please check --gtf -> File does not exist: ${params.gtf}")
     }
 }
+
 //
 // Generate methods description for MultiQC
 //

@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: ARCASHLA_VALIDATE_FASTQ tool environment.
+#
+# biopet-validatefastq is the Bioconda packaging of biopet/validatefastq, a
+# Java tool shipped upstream as a single assembly jar. 0.1.1 is the only
+# version Bioconda ships and the only release upstream has published, so the
+# pin can never drift.
+#
+# The package installs the executable as `biopet-validatefastq` - there is no
+# plain `validatefastq` alias in either the Conda package or the Biocontainers
+# image built from it - which is why main.nf invokes it by that name.
+#
+# openjdk is deliberately NOT restated here: the package already pins
+# `openjdk >=8,<9` itself, and repeating that constraint would risk drifting
+# from whatever the package actually requires.
+#
+# This one file backs both the `conda` directive and (via the Bioconda recipe
+# the Biocontainers image is auto-built from) the `container` directive in
+# main.nf - the standard nf-core pattern. No `procps-ng` entry is needed: the
+# Biocontainers image already ships `ps`, which Nextflow runs inside every
+# container to collect task trace metrics.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioconda::biopet-validatefastq=0.1.1

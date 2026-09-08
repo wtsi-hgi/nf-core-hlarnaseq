@@ -1,0 +1,37 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/nf-core/hlarnaseq/master/assets/schema_array_samples.json",
+    "title": "nf-core/hlarnaseq pipeline - params.array_samples schema",
+    "description": "Schema for the SNP-array samples manifest provided with params.array_samples. Each row is one PLINK dataset, not one sample: a PLINK fileset may hold many samples and HIBAG predicts all of them at once. The sample IDs that reach the consensus step come from the .fam IID column, not from array_sample_id.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "array_sample_id": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "Array dataset ID must be provided and cannot contain spaces. This is a label for the PLINK dataset used in task tags and output filenames - it is NOT the sample ID used downstream, which comes from the .fam IID column",
+                "meta": ["id", "array_sample_id"]
+            },
+            "array_bed_path": {
+                "type": "string",
+                "format": "file-path",
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.bed$",
+                "errorMessage": "PLINK BED path must be provided, cannot contain spaces and must have extension '.bed'"
+            },
+            "array_bim_path": {
+                "type": "string",
+                "format": "file-path",
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.bim$",
+                "errorMessage": "PLINK BIM path must be provided, cannot contain spaces and must have extension '.bim'"
+            },
+            "array_fam_path": {
+                "type": "string",
+                "format": "file-path",
+                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.fam$",
+                "errorMessage": "PLINK FAM path must be provided, cannot contain spaces and must have extension '.fam'"
+            }
+        },
+        "required": ["array_sample_id", "array_bed_path", "array_bim_path", "array_fam_path"]
+    }
+}

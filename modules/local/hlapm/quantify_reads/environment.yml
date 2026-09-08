@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: HLAPM_QUANTIFY_READS tool environment.
+#
+# This is the legacy Python 2 stack bin/make_a_table_210804_allHLAgenes.py
+# needs, and it replaces the Python 2 half of the previously
+# operator-prepared `hlapm-quantify` Conda environment (envs/hlapm-quantify.yml,
+# now removed - its R half moved to containers/datatools/). One file backs both
+# the `conda` and `container` directives in main.nf (see Dockerfile).
+#
+# python 2.7.15 is deliberate and permanent, not an oversight: the script is
+# unmodified legacy Python 2 (`print >> sys.stderr`, old-style super() calls),
+# and 2.7.15 is the newest Python 2 conda-forge ships. Python 2 has been end of
+# life since 2020 and receives no security updates - freezing it inside a
+# container, rather than asking operators to keep a Python 2 environment on
+# their machines, is the point of this image. Porting the script to Python 3 is
+# the real fix and is a much larger, separate piece of work.
+#
+# pybam is pinned by commit because it is a GitHub-only package with no
+# releases, no tags and no PyPI presence - a commit SHA is the only
+# reproducible handle on a version. This is the commit the working
+# `hlapm-quantify` environment's `pybam 1.0` was installed from (upstream HEAD
+# as of this writing). Override at image build time with
+# `--build-arg PYBAM_COMMIT=<sha>` (scripts/build_image_hlapm_quantify.sh
+# passes $PYBAM_COMMIT through); this file's URL is what `-profile conda` uses.
+#
+# quicksect is deliberately NOT installed. The script prefers it and falls back
+# to intervaltree ("quicksect is much faster than intervaltree, but harder to
+# install"), and intervaltree is the branch every result this pipeline has
+# produced so far came from. Adding quicksect would switch code paths as a side
+# effect of a packaging change; if it is ever added, the edit-distance table
+# must be re-validated against a known-good run first.
+#
+# procps-ng provides `ps`: Nextflow's task wrapper runs it inside every
+# container to collect CPU/memory trace metrics, and fails the whole task if it
+# is missing - the mambaorg/micromamba base image does not ship it. Not needed
+# for -profile conda (a regular Linux host always has `ps`), only for the image.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - conda-forge::python=2.7.15
+  - conda-forge::procps-ng
+  - conda-forge::pip
+  - pip:
+      - intervaltree==3.1.0
+      - https://github.com/JohnLonginotto/pybam/archive/846d98603905c57c31bf7b9abaf2eb8c89899e60.zip

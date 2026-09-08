@@ -54,7 +54,7 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 
 </details>
 
-`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. Genotyping runs inside a dedicated, operator-prepared `arcas-hla` Conda environment rather than the pipeline's main environment (see [usage docs](usage.md) for details); this pipeline never builds or updates the arcasHLA reference itself.
+`arcasHLA genotype` runs on each sample's validated, extracted read pair, requesting the genes listed in `--arcashla_genes`. This step provisions arcasHLA itself via its own `environment.yml`/`conda` and `container` directives (see [usage docs](usage.md#arcashla-genotyping-environment) for details) rather than a shared, operator-prepared Conda environment; its reference (IMGT/HLA + kallisto index) is a required, separately-prepared input (`--arcashla_reference_dir`, built with `scripts/build_arcashla_reference.sh`), the same pattern as `--hlala_graph_dir` for HLA-LA below.
 
 ### HLA-LA
 
@@ -63,15 +63,39 @@ The extracted files are concatenated gzip streams and are accepted by standard g
 
 - `hlala/`
   - `HLA-LA_combined.tsv`: Combined HLA-LA G-group allele calls across all WGS samples, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row, extracted from columns 1 and 3 of each sample's `R1_bestguess_G.txt`).
-  - `<sample_id>/R1_bestguess_G.txt`: Per-sample HLA-LA G-group best guess file.
-  - `<sample_id>/R1_bestguess.txt`: Per-sample HLA-LA best guess file, when produced by HLA-LA.
-  - `<sample_id>/hla.tar.gz`: Archive of the per-sample HLA-LA `hla/` result directory, when produced.
-  - `<sample_id>/hlala.log`: HLA-LA run log for the sample.
+  - `<sample_id>/`: HLA-LA's complete per-sample output directory, published in full (see the note on hard links below):
+    - `hla/`: the typing results, including `R1_bestguess_G.txt` (the G-group best guess file the combined TSV is built from), `R1_bestguess.txt`, and HLA-LA's full supporting output (`R1_pileup_*.txt`, `R1_PP_*_pairs.txt`, `R1_readIDs_*.txt`, `R1_columnIncompatibilities_*.txt`, `R1_parameters.txt`, `histogram_matchesPerRead.txt`, `summaryStatistics.txt`).
+    - `reads_per_level.txt`: read counts per graph level.
+    - `extraction.bam`, `extraction.bam.bai`, `extraction_mapped.bam`, `extraction_unmapped.bam`, `remapped_with_a.bam`, `remapped_with_a.bam.bai`, `R_1.fastq`, `R_2.fastq`, `R_U.fastq`: HLA-LA's own intermediates. These are large (multiple gigabytes per sample on real WGS BAMs) and are reproducible from the input BAM, so they are not usually of interest - they appear here only because publishing this directory is all-or-nothing, as explained below.
 
 </details>
 
 HLA-LA runs only when `--wgs_samples` is provided.
 The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` column and extracts allele calls from column 3 of each `R1_bestguess_G.txt` after the header.
+
+**The per-sample `hlala/<sample_id>/` directory is published as hard links, not copies, and this imposes a hard requirement: `--outdir` and the Nextflow work directory must be on the same filesystem.** If they are not, the run aborts with `Failed to publish file: ... [link]` - Nextflow does not fall back to copying. See [usage docs](usage.md#requirement---outdir-and-the-nextflow-work-directory-must-share-a-filesystem) for the reasoning, the HPC caveat, and the custom-config workaround.
+
+The short version: the `HLALA_TYPING` module declares each per-sample output directory as an output _and_ individual files nested inside it, and Nextflow (verified on 26.04.4) then offers only the enclosing directory to `publishDir`, never the nested paths - so publishing from this process is all-or-nothing, with no way to keep just the typing results without patching the module. Publishing everything by copy would duplicate the multi-gigabyte intermediates for every WGS sample, so `mode: 'link'` is used instead: hard links cost no additional disk space, and (unlike symlinks) the published files remain valid real files after the work directory is deleted. See the `HLALA_TYPING` entry in `conf/modules.config`.
+
+Two files published by earlier versions of this pipeline are gone: `<sample_id>/hla.tar.gz` (the `hla/` directory is published unarchived instead) and `<sample_id>/hlala.log` (HLA-LA's stdout is no longer redirected to a file; it is captured in the task's `.command.out` under the work directory).
+
+### HIBAG (SNP-array HLA imputation)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `hibag/`
+  - `HIBAG_combined.tsv`: Combined HIBAG allele calls across all SNP-array datasets, tab-separated with columns `sample_id`, `Locus`, `HLA_allele` (one allele per row). **This is the same format `hlala/HLA-LA_combined.tsv` uses**, so the consensus step consumes either interchangeably.
+  - `<array_sample_id>.hibag_calls.tsv`: The same three columns for one PLINK dataset, before combining.
+  - `<array_sample_id>.hibag_posterior.tsv`: Per-call diagnostics - `sample_id`, `locus`, `allele1`, `allele2`, `prob` (posterior probability), `matching`, `n_model_snps`, `n_matched_snps`. Not consumed by the pipeline; use it to judge call confidence and how much of the model matched your array. A low `n_matched_snps / n_model_snps` ratio is the strongest signal that a call should not be trusted, which is why `--hibag_min_matched_snps` fails the run below a threshold rather than letting it through.
+
+</details>
+
+HIBAG runs only when `--array_samples` is provided, and is mutually exclusive with HLA-LA. It replaces HLA-LA as the genotype-side caller, imputing HLA alleles from SNP-array genotypes rather than typing them from WGS alignments.
+
+Note that `sample_id` comes from the **`.fam` IID column** of each PLINK dataset, not from the samplesheet's `array_sample_id`. See [usage docs](usage.md#warning-a-row-is-one-plink-dataset-not-one-sample).
+
+Allele resolution differs between the two callers - HLA-LA reports G-groups (`A*01:01:01G`), HIBAG reports two fields (`A*01:01`) - but `--hla_consensus_truncate_fields` (default `2`) collapses both to the same resolution before consensus calling, so the two paths are directly comparable downstream.
 
 ### HLA consensus
 
@@ -98,7 +122,7 @@ The combined CSV preserves the WGS sample identifiers from the `WGS_sample_id` c
 
 </details>
 
-`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided; there is no separate flag to enable it, and it runs regardless of whether `--wgs_samples` is also provided. `--hlapm_repo` is mandatory whenever `--rna_samples` is provided, independent of `--wgs_samples`: the pipeline fails fast if it is missing or does not exist. It first converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV per WGS group (including synthetic `RNA_ONLY:<rna_id>` groups), filtered by the `--hlapm_allowed_loci` allow-list, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function, run inside a dedicated, operator-prepared `hlapm` Conda environment (see [usage docs](usage.md) for details). This iteration stops at reference building; HLApm's downstream STAR-index/mapping/allele-assignment stages and single-cell mode are out of scope.
+`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided; there is no separate flag to enable it, and it runs regardless of whether `--wgs_samples` is also provided. Under a container profile HLApm comes from the module's own image; without one (`-profile conda`, or no profile) `--hlapm_repo` is mandatory and the pipeline fails fast at launch if it is missing or does not exist. It first converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV per WGS group (including synthetic `RNA_ONLY:<rna_id>` groups), filtered by the `--hlapm_allowed_loci` allow-list, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function (see [usage docs](usage.md#hlapm-container) for how HLApm and its R dependencies are provisioned). This iteration stops at reference building; HLApm's downstream STAR-index/mapping/allele-assignment stages and single-cell mode are out of scope.
 
 ### HLApm STAR index
 
@@ -149,9 +173,9 @@ This step reuses the [nf-core/modules `STAR_ALIGN`](https://github.com/nf-core/m
 
 </details>
 
-For every RNA sample, the pipeline queryname-sorts each of that sample's per-allele coordinate-sorted BAMs (`STAR_ALIGN`'s output, above) using the [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) module (`samtools sort -n`), then runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of queryname-sorted per-allele BAMs plus the cohort-wide `combined.gtf`. The script assigns each read to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing the per-read `edit_distance.tsv` table above. It runs inside a dedicated, operator-prepared `hlapm-quantify` Conda environment (see [usage docs](usage.md) for details).
+For every RNA sample, the pipeline queryname-sorts each of that sample's per-allele coordinate-sorted BAMs (`STAR_ALIGN`'s output, above) using the [nf-core/modules `SAMTOOLS_SORT`](https://github.com/nf-core/modules/tree/master/modules/nf-core/samtools/sort) module (`samtools sort -n`), then runs the legacy, unmodified Python 2.7 `make_a_table_210804_allHLAgenes.py` script once per RNA sample, over that sample's full set of queryname-sorted per-allele BAMs plus the cohort-wide `combined.gtf`. The script assigns each read to a gene by minimum summed-mate edit distance across every candidate allele/gene it overlaps, producing the per-read `edit_distance.tsv` table above. It runs from the module's own frozen Python 2.7 container (see [usage docs](usage.md#hlapm-read-quantification-container) for details).
 
-A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the per-gene `<rna_id>.HLA_gene_summary.tsv` read-count summary described above, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script) and the same `hlapm-quantify` Conda environment. Per-allele-level read counts and a cross-sample combined gene-count table remain out of scope for this iteration; see [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts), below, for an independently produced whole-genome `featureCounts` table, and [HLA read-count reconciliation diff table](#hla-read-count-reconciliation-diff-table) for how this per-read table (via `edit_distance.tsv`, above) is reconciled against the HLA-region-restricted `featureCounts` table.
+A new `HLAPM_SUMMARIZE_READCOUNTS` step then turns that per-read table into the per-gene `<rna_id>.HLA_gene_summary.tsv` read-count summary described above, using a new `bin/summarize_hla_readcounts.R` script (adapted from `davenportlab/HLApm_farm_pipeline`'s summarization script), run from the [shared data-tools container](usage.md#shared-data-tools-container). Per-allele-level read counts, a cross-sample combined gene-count table, and comparison against `featureCounts` ground truth remain out of scope for this iteration.
 
 ### Whole-genome common-reference gene counts
 
@@ -201,6 +225,7 @@ For every RNA sample, independent of `--sample_key`/HLApm, the pipeline runs `SU
 </details>
 
 Whenever an RNA sample has both a `counts_commonref_hla` read-gene-assignment table and a personalized-HLA `edit_distance.tsv`, the pipeline reconciles the two: for every personalized-HLA read pair, it is kept as HLA if `counts_commonref_hla` has no matching read pair (`missing_fc`), if `counts_commonref_hla` also assigned it to an HLA gene (`both_hla`), or if `counts_commonref_hla` assigned it to a non-HLA gene but the personalized-reference edit distance is equal to or better than that assignment's (reassigned to HLA); otherwise it is dropped in favor of the better non-HLA `counts_commonref_hla` assignment. This adapts the read-pair reconciliation logic of a prototype script (`artifacts/scripts/compare-hla-rnaseq-readcounts.py`) via a new `bin/reconcile_hla_readcounts.py` script and a new `HLA_READCOUNT_RECONCILE` subworkflow/`HLA_READCOUNT_RECONCILE_DIFF` module, reusing the same `--hlapm_quantify_max_edit_distance` threshold (default `16`) already used by `HLAPM_SUMMARIZE_READCOUNTS` above. This is iteration 3 of the "hijack original count matrix" roadmap item: it produces only the per-sample diff table; merging/patching `counts_commonref`'s whole-genome table using this diff table remains a future iteration - see [usage docs](usage.md#hla-read-count-reconciliation-diff-table).
+
 
 ### Pipeline information
 

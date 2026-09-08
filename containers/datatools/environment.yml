@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/environment-schema.json
+# nf-core/hlarnaseq: shared python3 + R data-tools environment.
+#
+# Unlike every other environment.yml in this repository, this one is NOT
+# module-local: it is shared by the four modules that run this pipeline's own
+# bin/ analysis scripts, each of which points its `conda` directive at this
+# file and its `container` directive at the one image built from it:
+#
+#   HLA_CONSENSUS               bin/call_hla_consensus.py          python3, pandas
+#   HLAPM_PREPARE_INPUT         bin/consensus_to_hlapm.py          python3 (stdlib only)
+#   ARCASHLA_COMBINE            bin/combine_arcashla_genotypes.R   jsonlite, dplyr, tibble, stringr, purrr
+#   HLAPM_SUMMARIZE_READCOUNTS  bin/summarize_hla_readcounts.R     dplyr, tidyr
+#
+# One file rather than four near-identical module-local ones: these scripts are
+# small data transformations over the same two interpreters, and four copies of
+# an overlapping package list would drift. See containers/datatools/README.md.
+#
+# This replaces both the python/R half of the operator-prepared `nf-core`
+# environment (envs/nf-core.yml, now launcher-only) and the R half of the
+# `hlapm-quantify` environment (envs/hlapm-quantify.yml, now removed).
+#
+# Versions are pinned to those the pipeline's existing published results were
+# produced with, so containerization does not silently change any output. The
+# one exception is r-tidyr: its previous version (1.2.1) was built against
+# r-base 4.0.3 in the old `hlapm-quantify` environment, and there is no such
+# build for the r-base pinned here, so it necessarily moves. That is why
+# HLAPM_SUMMARIZE_READCOUNTS's output was diffed against a known-good run when
+# this image was introduced.
+#
+# procps-ng provides `ps`, which Nextflow's task wrapper runs inside every
+# container to collect trace metrics; the mambaorg/micromamba base image does
+# not ship it. Container-only need - any regular Linux host already has it.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - conda-forge::python=3.14.6
+  - conda-forge::pandas=3.0.3
+  - conda-forge::r-base=4.5.3
+  - conda-forge::r-jsonlite=2.0.0
+  - conda-forge::r-dplyr=1.2.1
+  - conda-forge::r-tibble=3.3.1
+  - conda-forge::r-stringr=1.6.0
+  - conda-forge::r-purrr=1.2.2
+  # 1.3.2, not the 1.2.1 the old `hlapm-quantify` environment had: that
+  # version only has builds for older r-base. Pinned here to what the solver
+  # picks for r-base 4.5.3, so this file stays fully reproducible.
+  - conda-forge::r-tidyr=1.3.2
+  - conda-forge::procps-ng

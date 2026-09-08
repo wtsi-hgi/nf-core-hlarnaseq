@@ -43,9 +43,10 @@ params.fasta = getGenomeAttribute('fasta')
 workflow NFCORE_HLARNASEQ {
 
     take:
-    rna_samplesheet // channel: RNA samplesheet read in from --rna_samples
-    wgs_samplesheet // channel: WGS samplesheet read in from --wgs_samples
-    sample_key      // channel: RNA/WGS sample key read in from --sample_key
+    rna_samplesheet   // channel: RNA samplesheet read in from --rna_samples
+    wgs_samplesheet   // channel: WGS samplesheet read in from --wgs_samples
+    array_samplesheet // channel: SNP-array samplesheet read in from --array_samples
+    sample_key        // channel: RNA/WGS sample key read in from --sample_key
 
     main:
 
@@ -55,6 +56,7 @@ workflow NFCORE_HLARNASEQ {
     HLARNASEQ (
         rna_samplesheet,
         wgs_samplesheet,
+        array_samplesheet,
         sample_key
     )
 }
@@ -78,6 +80,7 @@ workflow {
         params.outdir,
         params.rna_samples,
         params.wgs_samples,
+        params.array_samples,
         params.sample_key,
         params.help,
         params.help_full,
@@ -90,6 +93,7 @@ workflow {
     NFCORE_HLARNASEQ (
         PIPELINE_INITIALISATION.out.rna_samplesheet,
         PIPELINE_INITIALISATION.out.wgs_samplesheet,
+        PIPELINE_INITIALISATION.out.array_samplesheet,
         PIPELINE_INITIALISATION.out.sample_key
     )
     //
