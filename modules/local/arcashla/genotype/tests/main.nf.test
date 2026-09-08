@@ -9,17 +9,12 @@ nextflow_process {
 
     test("runs arcasHLA genotype with no external Conda environment (regression guard for the arcas-hla environment/container packaging)") {
 
+        config "./nextflow.config"
+
         when {
             params {
                 outdir = "$outputDir"
                 arcashla_genes = 'A,B,C'
-                // Points at a pre-built reference (see
-                // scripts/build_arcashla_reference.sh); this test does not
-                // build one itself. Set TEST_ARCASHLA_REFERENCE_DIR when
-                // running this test - e.g. to an existing installation's
-                // share/arcas-hla-*/dat/ref, or to the output of
-                // scripts/build_arcashla_reference.sh.
-                arcashla_reference_dir = System.getenv('TEST_ARCASHLA_REFERENCE_DIR')
             }
             process {
                 """
@@ -31,6 +26,20 @@ nextflow_process {
                             file("${projectDir}/tests/fixtures/arcashla/genotype/HLA_SIGNAL_R2.fastq.gz", checkIfExists: true)
                         ]
                     )
+                )
+                // A pre-built reference (see
+                // scripts/build_arcashla_reference.sh); this test does not
+                // build one itself. Set TEST_ARCASHLA_REFERENCE_DIR when
+                // running this test - e.g. to an existing installation's
+                // share/arcas-hla-*/dat/ref, or to the output of
+                // scripts/build_arcashla_reference.sh. Pointing it at a
+                // directory OUTSIDE the project tree is what makes this test
+                // cover the bind-mount path: the reference is a staged input
+                // precisely so the container engine mounts it wherever it
+                // lives.
+                input[1] = file(
+                    System.getenv('TEST_ARCASHLA_REFERENCE_DIR') ?: 'set-TEST_ARCASHLA_REFERENCE_DIR-to-a-prebuilt-arcashla-reference',
+                    checkIfExists: true
                 )
                 """
             }

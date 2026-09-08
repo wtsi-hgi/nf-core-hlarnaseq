@@ -1,0 +1,12 @@
+PLACEHOLDER - this is NOT a kallisto index.
+
+A real hla.idx is a binary kallisto index built by `arcasHLA reference` (see
+scripts/build_arcashla_reference.sh). This file exists only so that
+`-profile test` satisfies `arcashlaReferenceDirExistsError()`'s check that
+--arcashla_reference_dir points at a built reference rather than at an empty
+or half-built directory. No test ever reads it: the tests that use this
+directory either run `-stub-run` (where ARCASHLA_GENOTYPE's stub block never
+invokes arcasHLA) or fail earlier, at parameter/samplesheet validation or at
+ARCASHLA_VALIDATE_FASTQ.
+
+See this directory's README.md.

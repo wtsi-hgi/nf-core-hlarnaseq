@@ -22,6 +22,18 @@ process ARCASHLA_GENOTYPE {
 
     input:
     tuple val(meta), path(reads)
+    // Taken as a staged input rather than read from params directly inside the
+    // script, so Nextflow resolves its real path and adds it to the container
+    // bind list itself (singularity.autoMounts / Docker volume mapping). A raw
+    // "${params.arcashla_reference_dir}" interpolation is invisible to that
+    // machinery, so a reference living anywhere outside an already-bound path -
+    // e.g. behind a host symlink onto another filesystem - produced a dangling
+    // dat/ref inside the container and arcasHLA's confusing
+    // "FileNotFoundError: .../dat/ref/hla.p.json". This is the same reason
+    // HLALA_TYPING takes its graph as path(graph). stageAs pins the in-task
+    // name so the script does not depend on what the operator called their
+    // directory and cannot collide with the staged FASTQs.
+    path(arcashla_reference, stageAs: 'arcashla_reference')
 
     output:
     tuple val(meta), path("${meta.id}.genotype.json"), emit: genotype
@@ -48,15 +60,32 @@ process ARCASHLA_GENOTYPE {
         exit 1
     fi
 
+    # The staged reference has to actually resolve from inside the task - under
+    # a container that means Nextflow bound its real path in. Checked here, up
+    # front, rather than left to fail later as arcasHLA's
+    # "FileNotFoundError: .../dat/ref/hla.p.json", which says nothing about a
+    # missing mount being the cause. -s follows symlinks, so this exercises the
+    # whole chain (staged symlink -> real path) exactly as arcasHLA will.
+    ARCASHLA_REF_SOURCE="\$PWD/arcashla_reference"
+    for ref_file in hla.idx hla.p.json; do
+        if [[ ! -s "\${ARCASHLA_REF_SOURCE}/\${ref_file}" ]]; then
+            echo "ERROR: the staged arcasHLA reference has no readable \${ref_file} (\${ARCASHLA_REF_SOURCE}/\${ref_file})." >&2
+            echo "       If that path is a dangling symlink, its target was not mounted into the container; if it is empty or incomplete, build the reference with scripts/build_arcashla_reference.sh and pass it as --arcashla_reference_dir." >&2
+            ls -la "\${ARCASHLA_REF_SOURCE}/" >&2 || true
+            exit 1
+        fi
+    done
+
     # arcasHLA has no option to point genotype at an external reference; it
     # always reads dat/ref beneath its own install. --arcashla_reference_dir
     # is a pre-built reference (IMGT/HLA + kallisto index; see
     # scripts/build_arcashla_reference.sh), prepared once, out of band, the
-    # same way --hlala_graph_dir is for HLA-LA. Point dat/ref at it with a
-    # symlink swap: unlike building the reference in-place, this is fast and
-    # atomic, so it's safe to redo unconditionally on every task with no
-    # locking, whether the task got a fresh Conda environment or a fresh
-    # container instance.
+    # same way --hlala_graph_dir is for HLA-LA. It arrives here as the staged
+    # 'arcashla_reference' input (see the input block for why that matters),
+    # and dat/ref is pointed at it with a symlink swap: unlike building the
+    # reference in-place, this is fast and atomic, so it's safe to redo
+    # unconditionally on every task with no locking, whether the task got a
+    # fresh Conda environment or a fresh container instance.
     #
     # Guard against a real (non-symlink) dat/ref that already has a real
     # reference built into it: a freshly installed arcas-hla package's
@@ -76,7 +105,7 @@ process ARCASHLA_GENOTYPE {
         exit 1
     fi
     rm -rf "\${ARCASHLA_REF_TARGET}"
-    ln -s "${params.arcashla_reference_dir}" "\${ARCASHLA_REF_TARGET}"
+    ln -s "\${ARCASHLA_REF_SOURCE}" "\${ARCASHLA_REF_TARGET}"
 
     # `arcasHLA genotype` independently imports and calls reference.py's own
     # check_ref(), which - regardless of dat/ref already being correctly in

@@ -7,6 +7,7 @@ workflow ARCASHLA {
 
     take:
     ch_rna_samplesheet
+    ch_arcashla_reference // channel: value(path) - prepared arcasHLA reference directory (--arcashla_reference_dir); a value channel so every sample reuses it
 
     main:
 
@@ -17,7 +18,7 @@ workflow ARCASHLA {
 
     ARCASHLA_VALIDATE_FASTQ(ch_extracted_reads)
 
-    ARCASHLA_GENOTYPE(ARCASHLA_VALIDATE_FASTQ.out.reads)
+    ARCASHLA_GENOTYPE(ARCASHLA_VALIDATE_FASTQ.out.reads, ch_arcashla_reference)
 
     ch_genotype_json = ARCASHLA_GENOTYPE.out.genotype
         .map { meta, genotype_json -> [ meta.id, genotype_json ] }

@@ -65,7 +65,12 @@ workflow HLARNASEQ {
     ch_hla_readcount_diff_warnings = channel.empty()
 
     if (params.rna_samples) {
-        ARCASHLA(ch_rna_samplesheet)
+        // Passed down as a value channel so ARCASHLA_GENOTYPE stages the
+        // prepared reference directory as a real process input - which is what
+        // makes Nextflow bind its real path into the container - and reuses it
+        // for every sample instead of consuming it on the first one.
+        ch_arcashla_reference = Channel.value(file(params.arcashla_reference_dir, checkIfExists: true))
+        ARCASHLA(ch_rna_samplesheet, ch_arcashla_reference)
         ch_versions = ch_versions.mix(ARCASHLA.out.versions)
         ch_arcashla_reads = ARCASHLA.out.reads
         ch_arcashla_validation_logs = ARCASHLA.out.validation_logs

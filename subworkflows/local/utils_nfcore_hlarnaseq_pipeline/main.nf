@@ -544,6 +544,29 @@ def arcashlaReferenceDirExistsError() {
     if (params.rna_samples && !file(params.arcashla_reference_dir).exists()) {
         error("Please check --arcashla_reference_dir -> Directory does not exist: ${params.arcashla_reference_dir}")
     }
+
+    // Existence alone is not enough: `scripts/build_arcashla_reference.sh`
+    // creates its output directory before it does any work, so a build that
+    // aborted part-way (no network, not enough scratch space) leaves an empty
+    // directory behind that passes every check above. ARCASHLA_GENOTYPE then
+    // fails deep inside the run with arcasHLA's own
+    // "FileNotFoundError: .../dat/ref/hla.p.json", which points at the
+    // container rather than at the real problem. hla.idx (the kallisto index)
+    // and hla.p.json are only ever produced by `arcasHLA reference` itself, so
+    // requiring both here is a reliable "this is a real, built reference" test.
+    //
+    // Skipped for stub runs: -profile test points at
+    // tests/fixtures/arcashla_reference_stub/, a deliberate placeholder that
+    // exists only to satisfy the path checks, and no stub task reads a
+    // reference at all.
+    if (params.rna_samples && params.arcashla_reference_dir && !workflow.stubRun) {
+        def missing = ['hla.idx', 'hla.p.json'].findAll { ref_file ->
+            !file("${params.arcashla_reference_dir}/${ref_file}").exists()
+        }
+        if (missing) {
+            error("Please check --arcashla_reference_dir -> Not a built arcasHLA reference, missing ${missing.join(', ')}: ${params.arcashla_reference_dir}\nBuild one with scripts/build_arcashla_reference.sh (this directory exists but has no IMGT/HLA + kallisto index in it).")
+        }
+    }
 }
 //
 // Exit pipeline if RNA inputs are provided without a whole-genome reference GTF

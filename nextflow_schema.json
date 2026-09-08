@@ -255,7 +255,7 @@
                     "format": "directory-path",
                     "exists": true,
                     "description": "Path to a pre-built arcasHLA reference directory (IMGT/HLA + kallisto index).",
-                    "help_text": "Required whenever `--rna_samples` is provided. arcasHLA has no option to point `genotype` at an external reference at runtime, so `ARCASHLA_GENOTYPE` symlinks this directory into place as its own `dat/ref` at task start. Build it once with `scripts/build_arcashla_reference.sh`.",
+                    "help_text": "Required whenever `--rna_samples` is provided. arcasHLA has no option to point `genotype` at an external reference at runtime, so `ARCASHLA_GENOTYPE` takes this directory as a staged process input (which is what makes container engines bind-mount it automatically) and symlinks it into place as its own `dat/ref` at task start. It may therefore live on any filesystem the executor can read, with no manual bind flags. Build it once with `scripts/build_arcashla_reference.sh`; the pipeline checks at launch that the directory really contains a built reference (`hla.idx`, `hla.p.json`), not just that it exists.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "igenomes_ignore": {

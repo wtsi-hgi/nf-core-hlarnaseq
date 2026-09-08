@@ -1,0 +1,3 @@
+{
+    "_comment": "PLACEHOLDER - this is NOT arcasHLA reference data. A real hla.p.json is produced by `arcasHLA reference` (see scripts/build_arcashla_reference.sh). This file exists only so that -profile test satisfies arcashlaReferenceDirExistsError()'s check that --arcashla_reference_dir points at a built reference rather than at an empty or half-built directory. No test ever reads it. See this directory's README.md."
+}
