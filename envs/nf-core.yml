@@ -1,39 +1,22 @@
-# nf-core/hlarnaseq: main runtime environment.
-# The environment Nextflow itself runs in - a launcher environment only. No
-# pipeline step depends on anything installed here any more.
-# See docs/environment_setup.md.
+# nf-core/hlarnaseq: launcher environment.
 #
-# The Python/R interpreters and libraries this file used to provide for
-# bin/call_hla_consensus.py, bin/consensus_to_hlapm.py,
-# bin/combine_arcashla_genotypes.R (and, via the removed `hlapm-quantify`
-# environment, bin/summarize_hla_readcounts.R) are deliberately NOT listed
-# below any more: those four modules - HLA_CONSENSUS, HLAPM_PREPARE_INPUT,
-# ARCASHLA_COMBINE and HLAPM_SUMMARIZE_READCOUNTS - now share the environment
-# declared in containers/datatools/environment.yml, resolved by Nextflow under
-# -profile conda/docker/singularity/apptainer. Running those steps with none of
-# those profiles now fails fast with a message naming them, rather than
-# silently using whatever interpreter happens to be on the host PATH.
+# This environment exists only to *launch* the pipeline and to run the
+# fixture-building scripts under testdata-make/. No pipeline step depends on
+# anything installed here.
 #
-# samtools is still listed below, but NO pipeline process depends on it any
-# more: ARCASHLA_EXTRACT - the only module that called samtools off this
-# environment's PATH - now provisions it from its own environment.yml /
-# container directive (bioconda::samtools=1.24), the same pin the vendored
-# nf-core SAMTOOLS_SORT module uses. The entry is retained solely because the
-# testdata-make/ fixture-building scripts invoke samtools directly (see
-# testdata-make/README.md); it can be dropped if those ever stop needing it.
+# Every tool the pipeline itself runs is declared by the process that runs it:
+# an environment.yml feeding that module's `conda` directive, paired with a
+# matching pinned `container` directive, resolved by Nextflow under
+# -profile conda/docker/singularity/apptainer. See docs/environment_setup.md.
 #
-# ARCASHLA_VALIDATE_FASTQ's validator is NOT listed here and no longer needs
-# to be installed by hand: it now comes from that module's own
-# environment.yml / container directive (bioconda::biopet-validatefastq),
-# resolved by Nextflow under -profile conda/docker/singularity/apptainer.
-# No openjdk entry is needed here either - that module's own environment
-# pulls in the Java runtime its validator requires.
+# samtools is the one entry here that is not a launcher tool. It is retained
+# solely because testdata-make/'s scripts invoke it directly (see
+# testdata-make/README.md); no pipeline process uses it from this environment -
+# ARCASHLA_EXTRACT, COUNTS_COMMONREF_HLA_REFORMAT and the vendored
+# SAMTOOLS_SORT all declare their own bioconda::samtools=1.24. Drop it here if
+# testdata-make/ ever stops needing it.
 #
-# HIBAG_PREDICT is the same: bioconductor-hibag is deliberately NOT listed here
-# any more. It now comes from that module's own environment.yml / container
-# directive (bioconda::bioconductor-hibag=1.42.0), so running the SNP-array
-# path requires -profile conda/docker/singularity/apptainer rather than a
-# hand-installed package in this environment.
+# Generated with `conda env export --from-history` and hand-trimmed.
 channels:
   - conda-forge
   - bioconda

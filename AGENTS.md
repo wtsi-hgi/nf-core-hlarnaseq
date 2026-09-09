@@ -10,19 +10,37 @@ precisely quantifies human HLA gene expression from RNA-seq data
 by using personalized reference genomes.
 
 ## Technology Stack (fixed)
+
 - Nextflow for workflow execution
 - Python and R for data analysis
-- Runtime tool dependencies are provided either by the currently active Conda environment 
-  or by Docker/Singularity/Apptainer containers, 
-  following   the nf-core module convention of pairing each module's `conda`/
-  `environment.yml` declaration with a matching `container` directive.
+- Every runtime tool dependency is declared by the process that uses it, following
+  the nf-core module convention: an `environment.yml` feeding a `conda` directive,
+  paired with a matching pinned `container` directive. Nextflow resolves them under
+  `-profile conda`, `docker`, `singularity` or `apptainer`.
 - Follow NF-Core template and guidelines
 - Use existing NF-Core modules when possible
 
 Do not introduce alternative frameworks and technologies.
-Docker and Singularity/Apptainer container creation and execution are permitted; 
-prefer the standard nf-core pattern of deriving both the `conda` and `container` directives 
-from one module `environment.yml`.
+Docker and Singularity/Apptainer container creation and execution are permitted;
+always derive both the `conda` and `container` directives from one
+`environment.yml`.
+
+**No pipeline step may depend on tools from the environment Nextflow was launched
+in.** That reproducibility bar is already met — every process under
+`modules/local/` and `modules/nf-core/` declares both directives — so treat it as
+an invariant to preserve, not a goal to work toward:
+
+- do not add a process without both a `conda` and a `container` directive;
+- never resolve a tool from `$PATH`, `conda run -n <env>`, an interpreter assumed
+  to exist on the host, or any operator-prepared environment;
+- the only environment an operator prepares is the one used to _launch_ the
+  pipeline (`nextflow`, `nf-core`, `nf-test`) and to run `testdata-make/`;
+  nothing inside the pipeline may rely on it.
+
+Large out-of-band **reference data** inputs (`--hlala_graph_dir`,
+`--arcashla_reference_dir`, `--hibag_model`, `--hlapm_repo`) are a separate,
+deliberate exception: they are data, not tools, and each has a helper script
+under `scripts/` that builds it inside the same pinned image the pipeline runs.
 
 ## Development Model
 
@@ -63,19 +81,25 @@ For AI-configuration maintenance:
 - Keep custom analysis scripts in Python or R under `bin/`, regardless of
   whether a module runs via Conda or a container — `bin/` scripts are staged
   onto `PATH` in both cases.
-- Assume that everything required to run the pipeline and custom scripts from
-  `bin/` is available either in the currently active Conda environment,
-  normally the `nf-core` profile, or in the module's container when running
-  a containerized profile;
+- Everything a process needs — including the interpreters its `bin/` script runs
+  under — comes from that process's own `conda`/`container` declaration. Never
+  from the launching environment.
 - Docker, Singularity, and Apptainer container creation, building, pulling,
-  and running are permitted. Prefer the standard nf-core module pattern:
-  declare dependencies once in a module `environment.yml`, feed it to the
+  and running are permitted. Use the standard nf-core module pattern:
+  declare dependencies once in an `environment.yml`, feed it to the
   `conda` directive, and pair it with a matching `container` directive
   (a pinned Biocontainers/Wave image, or a module-local `Dockerfile` when
   the tool is not on Bioconda).
-- Every runtime tool dependency should be documented, whether it is expected
-  from the active Conda environment, a container image, or both.
-- If some tool or library is missing, stop and ask the developer to install it.
+- Prefer a module-local `${moduleDir}/environment.yml`. The one shared
+  exception is `containers/datatools/`, for modules that run this repository's
+  own small `bin/` scripts over the same interpreters rather than a tool of
+  their own; see `containers/datatools/README.md` before adding to it.
+- Every runtime tool dependency must be pinned and documented in the
+  `environment.yml` that declares it, and its version reported in `versions.yml`.
+- If a module needs a tool it does not declare, add it to that module's
+  `environment.yml` and rebuild/repin its container — do not ask the developer to
+  install it into their environment. Only ask when a _launcher_ tool
+  (`nextflow`, `nf-core`, `nf-test`) or a container runtime is missing.
 - Keep test data small and suitable for nf-core test profiles.
 - Update `nextflow_schema.json`, docs, tests, and pipeline metadata together when parameters, inputs, or outputs change.
 - Preserve parameter validation through nf-schema.
@@ -90,23 +114,28 @@ For pipeline behavior changes, agents must consider:
 - nf-test coverage or snapshot updates;
 - `docs/usage.md`, `docs/output.md`, `README.md`, `CHANGELOG.md`, and citations when user-facing behavior changes;
 - whether a matching nf-core module already exists;
-- reproducibility of tool versions in the active Conda environment.
+- that every process still declares both a `conda` and a `container` directive,
+  with pinned versions and matching `versions.yml` reporting.
 
 ## Validation Expectations
 
 Use the smallest validation set that proves the iteration.
 
-Before running validation, agents must verify that the nf-core Conda
-environment is active:
+Before running validation, agents must verify the **launcher** tools are
+available. These are the only tools an agent ever expects from an environment
+rather than from a module's own declaration:
 
-- run `command -v nf-core`, `command -v nf-test`, and `command -v nextflow`;
-- if any of these commands are unavailable, activate the environment with
-  `conda activate nf-core` when possible;
-- if Conda shell activation is unavailable in the agent shell, preserve the
-  environment explicitly when running validation, for example:
-  `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; .agents/skills/validate-hlarnaseq/scripts/validate.sh'`;
-- if the tools are still unavailable, stop and ask the user to activate or fix
-  the nf-core environment.
+- run `command -v nextflow`, `command -v nf-test`, and `command -v nf-core`;
+- if any is unavailable, put the launcher environment on `PATH` for the
+  command, for example:
+  `export PATH="$HOME/miniforge3/envs/nf-core/bin:$PATH"; .agents/skills/validate-hlarnaseq/scripts/validate.sh`;
+- if they are still unavailable, stop and ask the user to fix the launcher
+  environment.
+
+Never "fix" a missing _pipeline_ tool this way. A `command not found` from
+inside a task means that module's `environment.yml`/`container` is wrong or a
+container profile was not used — never a reason to install something on the
+host or to fall back to the launcher environment.
 
 Container validation is enabled:
 
@@ -124,14 +153,14 @@ the sandbox, agents must run it with escalated privileges.
 In Codex this means calling the shell command with
 `sandbox_permissions="require_escalated"` and a justification such as:
 
-> Do you want to allow validation to access network and local tool caches while
-> preserving the activated nf-core Conda environment?
+> Do you want to allow validation to access network, container registries, and
+> local tool caches?
 
-When escalation is required and the nf-core environment path must be preserved,
-use this command shape:
+When escalation is required and the launcher environment must be on `PATH`, use
+this command shape:
 
 ```bash
-/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; .agents/skills/validate-hlarnaseq/scripts/validate.sh'
+export PATH="$HOME/miniforge3/envs/nf-core/bin:$PATH"; .agents/skills/validate-hlarnaseq/scripts/validate.sh
 ```
 
 Preferred checks, when available:

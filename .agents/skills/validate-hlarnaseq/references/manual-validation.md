@@ -24,6 +24,8 @@ Use these checks when the change cannot be fully proven by automated tests.
 
 ## Dependencies
 
-- Confirm any new tool is expected from the active Conda environment, a container image, or both, and that the module's `environment.yml` matches what's declared.
+- Confirm every process the diff touches declares both a `conda` directive (backed by an `environment.yml`) and a matching pinned `container` directive.
+- Confirm each tool the process's script actually calls is pinned in that `environment.yml` — no tool taken from the launching environment, `$PATH`, or `conda run -n <env>`.
+- Confirm a changed shared environment had its image tag bumped in `scripts/build_image_*.sh` **and** in every consuming module, and that the image was rebuilt.
 - Confirm tool versions are captured in pipeline software versions output.
 - Confirm `CITATIONS.md` and README citations are updated when new tools or methods are introduced.

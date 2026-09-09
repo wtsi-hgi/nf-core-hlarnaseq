@@ -12,10 +12,12 @@ The workflow is intentionally human-in-the-loop:
 
 Agents must not commit changes unless explicitly asked.
 
-Runtime tools may be provided by the active Conda environment or by
-Docker/Singularity/Apptainer containers built from a module's
-`environment.yml` (both are permitted); custom Python and R scripts live
-under `bin/` either way.
+Every runtime tool comes from the declaration of the process that uses it: an
+`environment.yml` feeding a `conda` directive, paired with a matching pinned
+`container` directive, resolved by Nextflow under `-profile conda`, `docker`,
+`singularity` or `apptainer`. No pipeline step may take a tool from the
+environment Nextflow was launched in. Custom Python and R scripts live under
+`bin/` and run against those declared interpreters.
 
 ## Roles
 

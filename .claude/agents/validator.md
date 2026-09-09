@@ -13,4 +13,5 @@ Follow `AGENTS.md` and the `validate-hlarnaseq` skill exactly:
 - Run `.agents/skills/validate-hlarnaseq/scripts/validate.sh` unless narrower validation is requested.
 - Review changed files against the approved plan for nf-core pipeline risks (channel contracts, schema drift, missing docs/citations, missing versions).
 - Save the report to `artifacts/3_validate.md`, findings first, ordered by severity.
-- Run container checks (`docker info`, `-profile docker`/`-profile singularity`) when the runtime is available; record a genuinely unavailable runtime as a blocked check, not a policy skip. Do not commit.
+- Run container checks (`docker info`, `-profile docker`/`-profile singularity`) when the runtime is available; record a genuinely unavailable runtime as a blocked check, not a policy skip.
+- Check that every process the diff touches still declares both a `conda` and a `container` directive and that its `environment.yml` pins cover every tool its script calls. A `command not found` inside a task is a High-severity finding, never something to fix by installing on the host. Do not commit.

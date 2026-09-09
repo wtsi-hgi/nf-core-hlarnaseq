@@ -39,10 +39,16 @@ Provide an RNA samplesheet with the exact columns `rna_id,bam,bai,unpaired_r1,un
 
 ```bash
 nextflow run wtsi-hgi/hlarnaseq \
+   -profile singularity \
    --rna_samples rna_samples.csv \
    --hla_region chr6:28500000-33400000 \
    --outdir <OUTDIR>
 ```
+
+> [!IMPORTANT]
+> A profile is required. Every tool this pipeline runs is declared by the process that runs it — an `environment.yml` feeding a `conda` directive, paired with a matching pinned `container` — so nothing is taken from the environment you launch Nextflow in. Use `-profile singularity`, `docker`, `apptainer` or `conda`; with none of them, every step fails fast saying so.
+>
+> Most images are public and pulled for you, but **four are currently built locally** and need `scripts/build_image_{arcashla,hlapm,hlapm_quantify,datatools}.sh` run once before your first containerized run. See [Dependencies and profiles](docs/usage.md#dependencies-and-profiles).
 
 > [!WARNING]
 > Please provide pipeline parameters via the CLI or Nextflow `-params-file` option.
@@ -54,6 +60,7 @@ The genotype-side HLA calls are optional and come from one of two sources. Use `
 
 ```bash
 nextflow run wtsi-hgi/hlarnaseq \
+   -profile singularity \
    --rna_samples rna_samples.csv \
    --hla_region chr6:28500000-33400000 \
    --array_samples array_samples.csv \

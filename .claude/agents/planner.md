@@ -11,6 +11,7 @@ Follow `AGENTS.md` and the `plan-pipeline-change` skill exactly:
 
 - Inspect the relevant pipeline files before planning.
 - Check whether an existing nf-core module/subworkflow should be used before proposing custom code.
+- For every process the plan adds or changes, say which `environment.yml` provides each tool it calls and at which pinned version. Never plan a step that takes a tool from the launching environment.
 - Produce a minimal one-iteration plan using `.agents/skills/plan-pipeline-change/references/plan-template.md`.
 - Save the plan to `artifacts/1_plan.md` and stop for explicit human approval.
 - Never implement code. Never commit.

@@ -42,16 +42,27 @@ Skip this skill only when the user explicitly asks to bypass the plan/approval s
 
 ## Dependency and Container Policy
 
-- Treat runtime tools as provided by the currently active Conda environment,
-  or by a Docker/Singularity/Apptainer container built from the module's
-  `environment.yml` — both are permitted.
-- Plan custom Python and R scripts under `bin/`.
-- Container creation, packaging, pulls, and containerized execution profiles
-  may be planned. Prefer the standard nf-core pattern: one module
-  `environment.yml` feeding both the `conda` directive and a matching
-  `container` directive.
-- When adding a tool, document the Conda environment expectation (and/or
-  container image), versions reporting, and citation impact.
+- Every runtime tool must come from the declaration of the process that uses it:
+  an `environment.yml` feeding a `conda` directive, paired with a matching pinned
+  `container` directive. Never plan a step that takes a tool from the environment
+  Nextflow was launched in, from `$PATH`, or via `conda run -n <env>`.
+- A plan that adds or changes a process must say which `environment.yml` provides
+  each tool it calls, and at which pinned version.
+- Plan custom Python and R scripts under `bin/`; they run against the
+  interpreters their calling module declares.
+- Prefer a module-local `${moduleDir}/environment.yml`. The shared
+  `containers/datatools/` environment exists only for modules running this
+  repository's own small `bin/` scripts over the same interpreters; read
+  `containers/datatools/README.md` before planning an addition to it.
+- Container creation, packaging, pulls, and containerized execution profiles may
+  be planned. A tool with no Bioconda package needs a module-local `Dockerfile`
+  plus a `scripts/build_image_*.sh`, as several modules already have.
+- When adding a tool, document the pinned version, the image it resolves to under
+  each profile, versions reporting, and citation impact.
+- Large out-of-band **reference data** (`--hlala_graph_dir`,
+  `--arcashla_reference_dir`, `--hibag_model`, `--hlapm_repo`) is the one
+  legitimate operator-prepared input. It is data, not tools; each needs a helper
+  script under `scripts/` that builds it inside the pipeline's own pinned image.
 
 ## Output
 

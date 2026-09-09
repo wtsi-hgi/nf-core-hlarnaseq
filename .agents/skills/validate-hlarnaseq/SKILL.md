@@ -41,14 +41,16 @@ Use this skill when asked to validate, review, or quality-check an implementatio
 
 ## Severity Guidance
 
-- High: likely runtime failure, incorrect scientific result, invalid schema, broken test profile, missing required active-Conda dependency.
+- High: likely runtime failure, incorrect scientific result, invalid schema, broken test profile, a process missing its `conda`/`container` declaration or calling a tool that declaration does not provide.
 - Medium: user-facing docs/schema drift, incomplete validation of changed workflow behavior, missing citations or versions for new tools.
 - Low: maintainability issues, narrow docs gaps, minor style issues that do not affect execution.
 
 ## Conda and Container Policy
 
-- Before validation, verify `nf-core`, `nf-test`, and `nextflow` are available from the active environment.
-- If they are unavailable, try preserving the expected environment path with `/bin/zsh -lc 'export PATH="/Users/gz3/apps/miniforge/envs/nf-core/bin:$PATH"; ...'`.
+- Before validation, verify the **launcher** tools `nextflow`, `nf-test` and `nf-core` are available. These are the only tools expected from an environment rather than from a module's own declaration.
+- If they are unavailable, put the launcher environment on `PATH` for the command: `export PATH="$HOME/miniforge3/envs/nf-core/bin:$PATH"; ...`.
+- Every pipeline tool must come from its process's `conda`/`container` declaration. A `command not found` from inside a task is a **finding** — a wrong or missing `environment.yml`/`container`, or a run without a container profile — never something to fix by installing on the host or falling back to the launcher environment.
+- Check that every process touched by the diff still declares both a `conda` and a `container` directive, that its `environment.yml` pins match what the script actually calls, and that a changed shared image had its tag bumped in `scripts/build_image_*.sh` and in **every** consuming module.
 - Run `docker info` (and `singularity --version` / `apptainer --version` when relevant) and containerized `nextflow run` profiles — they are permitted and preferred when the runtime is available.
 - If a container runtime or image is genuinely unavailable, record that as a blocked check with residual risk, not a policy skip.
 - For pipeline smoke validation, run `./pipeline_testdata_run.sh` locally; it defaults to `-profile singularity` and clones `HLApm` into the run directory on first use.

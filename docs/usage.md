@@ -8,6 +8,34 @@
 
 <!-- TODO nf-core: Add documentation about anything specific to running your pipeline. For general topics, please point to (and add to) the main nf-core website. -->
 
+## Dependencies and profiles
+
+**Every tool this pipeline runs is declared by the process that runs it**, following the standard nf-core pattern: an `environment.yml` feeding the module's `conda` directive, paired with a matching pinned `container` directive. Nothing is taken from the environment you launch Nextflow in — you need `nextflow` itself on your `PATH`, and nothing else.
+
+That means **a profile is required**. Pick one:
+
+```bash
+-profile singularity   # or: docker, apptainer, conda
+```
+
+Running with none of them leaves every step unprovisioned; each fails fast with a message naming the profiles rather than silently using whatever happens to be on the host. `singularity`/`docker` are recommended; `-profile conda` works and is exercised, but has not been verified as thoroughly across systems.
+
+Two things still come from outside the pipeline, and neither is a tool:
+
+- **Reference data** — `--hlala_graph_dir`, `--arcashla_reference_dir`, `--hibag_model` and (under `-profile conda`) `--hlapm_repo`. Each is prepared once, out of band, by a helper script under [`scripts/`](../scripts/) that runs inside the same pinned image the pipeline itself uses. They are too large, too slow, or too licence-encumbered to build inside a task.
+- **Four container images that are currently built locally.** `ARCASHLA_GENOTYPE`, `HLAPM_BUILD_REF`, `HLAPM_QUANTIFY_READS` and the shared data-tools image resolve to `quay.io/hlarnaseq/...` tags that are **not published to any registry** — they are built on your machine by `scripts/build_image_*.sh` and found in the local Docker image store (or, for Singularity/Apptainer, as a local `.sif` referenced by path). Run those four scripts once before your first containerized run:
+
+  ```bash
+  scripts/build_image_arcashla.sh
+  scripts/build_image_hlapm.sh
+  scripts/build_image_hlapm_quantify.sh
+  scripts/build_image_datatools.sh
+  ```
+
+  Every other image (STAR, Subread, samtools, HLA-LA, HIBAG, validatefastq) is a public Biocontainers/Galaxy-depot/Wave image that Nextflow pulls for you. Publishing the four local ones to a registry is planned; until then a fresh clone needs these builds.
+
+See [`docs/environment_setup.md`](environment_setup.md) for the full per-module breakdown.
+
 ## RNA samplesheet input
 
 Provide the required RNA manifest with `--rna_samples` and the region to extract with `--hla_region`:
@@ -40,13 +68,13 @@ For each sample, the pipeline extracts complete pairs overlapping this region, e
 
 Each extracted read pair is checked with [validatefastq](https://github.com/biopet/validatefastq) before it is made available to downstream arcasHLA steps. A non-zero validator exit status or a reported `ERROR` stops the pipeline; the pipeline does not attempt to repair, reorder, or skip invalid pairs. Successful per-sample validation logs are written beneath `arcashla/validation/`.
 
-`ARCASHLA_VALIDATE_FASTQ` provisions the validator itself, via its own module `environment.yml`/`conda` directive (`bioconda::biopet-validatefastq=0.1.1`) paired with the matching pinned Biocontainers image, resolved automatically under `-profile conda`/`docker`/`singularity`/`apptainer`. Nothing needs to be installed by hand, and no operator-prepared Conda environment is used for this step. Note that the packaged executable is named `biopet-validatefastq` (there is no plain `validatefastq` alias); running the pipeline with no container/Conda profile at all leaves the module unprovisioned and it will fail fast saying so.
+`ARCASHLA_VALIDATE_FASTQ` provisions the validator itself, via its own module `environment.yml`/`conda` directive (`bioconda::biopet-validatefastq=0.1.1`) paired with the matching pinned Biocontainers image, resolved automatically under `-profile conda`/`docker`/`singularity`/`apptainer`. Note that the packaged executable is named `biopet-validatefastq` (there is no plain `validatefastq` alias); running the pipeline with no container/Conda profile at all leaves the module unprovisioned and it will fail fast saying so.
 
 Once a sample's extracted reads pass validation, the pipeline runs `arcasHLA genotype` on them, requesting the genes listed in `--arcashla_genes` (a broad default gene list is provided). Per-sample results are written to `arcashla/genotype/<rna_id>.genotype.json` (+ `.log`).
 
 ### arcasHLA genotyping environment
 
-`ARCASHLA_GENOTYPE` provisions arcasHLA itself via its own module `environment.yml`/`conda` directive (`arcas-hla=0.6.0`, `kallisto=0.44.0` - later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing), resolved automatically by Nextflow under `-profile conda`. No separate operator-prepared Conda environment is needed for this step.
+`ARCASHLA_GENOTYPE` provisions arcasHLA itself via its own module `environment.yml`/`conda` directive (`arcas-hla=0.6.0`, `kallisto=0.44.0` - later kallisto versions are incompatible with this arcasHLA version's `kallisto pseudo` output parsing), resolved automatically by Nextflow under `-profile conda` and, from the image built by `scripts/build_image_arcashla.sh`, under the container profiles.
 
 arcasHLA has no option to point `genotype` at an external reference database at runtime; the reference used is always whichever one exists inside its own install. Rather than have the pipeline build this reference itself (it clones the ~4GB [ANHIG/IMGTHLA](https://github.com/ANHIG/IMGTHLA) database - too slow and network-dependent to do inside every container build or as a first-task surprise), it is prepared once, out of band, and pointed to with a required **`--arcashla_reference_dir`** parameter - the same pattern as `--hlala_graph_dir` for HLA-LA above. `ARCASHLA_GENOTYPE` takes the directory as a staged process input and symlinks it into place as its own `dat/ref` at the start of every task; the symlink swap is fast and atomic, so it's redone unconditionally on every task with no locking or "first use" logic.
 
@@ -105,7 +133,7 @@ Each row is validated and loaded as a separate WGS sample channel entry. Relativ
 The index must be named exactly `<BAM file name>.bai` (for example `NA12878.bam` + `NA12878.bam.bai`), not `<BAM base name>.bai`: HLA-LA resolves a BAM's index by appending `.bai` to the BAM path, and will not find an index named otherwise. This is enforced by [`assets/schema_wgs_samples.json`](../assets/schema_wgs_samples.json), so a mismatch fails at samplesheet validation rather than deep inside HLA-LA.
 
 When `--wgs_samples` is provided, the pipeline runs HLA-LA once per WGS BAM and combines the reported G-group allele calls into `hlala/HLA-LA_combined.tsv`.
-HLA-LA itself (and the samtools/bwa/picard tooling it shells out to) is provisioned by the `HLALA_TYPING` module's own `environment.yml`/`conda` directive and matching pinned `container` (`hla-la=1.0.4`), resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. No separate operator-prepared Conda environment is needed for this step.
+HLA-LA itself (and the samtools/bwa/picard tooling it shells out to) is provisioned by the `HLALA_TYPING` module's own `environment.yml`/`conda` directive and matching pinned `container` (`hla-la=1.0.4`), resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. The image is public, so nothing has to be built locally for it - only the graph below is prepared out of band.
 
 The prepared HLA-LA **graph**, however, remains a required, separately-prepared input: the pipeline never downloads, builds, or packages HLA-LA graph data (the `hlala/preparegraph` step is deliberately not wired in), the same pattern as `--arcashla_reference_dir` for arcasHLA above.
 Provide the **parent** directory containing the prepared graph with `--hlala_graph_dir`, and the **graph directory's own name** with `--hlala_graph` (defaults to `PRG_MHC_GRCh38_withIMGT`) - i.e. the graph the pipeline uses is `<hlala_graph_dir>/<hlala_graph>`.
@@ -267,7 +295,7 @@ They carry accurate hg19 positions but 2012-era rsIDs, many of which have since 
 
 `HIBAG_PREDICT` follows the standard nf-core pattern: its dependency is declared once in [`modules/local/hibag/predict/environment.yml`](../modules/local/hibag/predict/environment.yml) (`bioconda::bioconductor-hibag=1.42.0`), which feeds both the module's `conda` directive and a matching pinned Biocontainers/Galaxy-depot `container` directive. Run the SNP-array path with one of `-profile conda`, `-profile docker`, `-profile singularity` or `-profile apptainer` and Nextflow provisions HIBAG for you.
 
-The package is deliberately **not** listed in [`envs/nf-core.yml`](../envs/nf-core.yml), so nothing here depends on `HIBAG` being installed in the environment you launch Nextflow from. Running with none of those profiles fails at this step with an explicit message naming the profiles to use, rather than silently imputing with whatever version happens to be on the host.
+Running with none of those profiles fails at this step with an explicit message naming the profiles to use, rather than silently imputing with whatever version happens to be on the host.
 
 The pin is 1.42.0 rather than the newer 1.46.0 because 1.42.0 is the most recent release for which the Galaxy depot publishes a Singularity image, so a single version covers all four profiles.
 
@@ -314,7 +342,7 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 ### HLApm container
 
-`HLAPM_BUILD_REF` follows the standard nf-core pattern for its R dependencies: they are declared once in [`modules/local/hlapm/build_ref/environment.yml`](../modules/local/hlapm/build_ref/environment.yml) (`r-base`, `data.table`, `dplyr`, `stringr`, `seqinr`, `Biostrings`, `rtracklayer`, `DECIPHER`, `bedtools`), which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm` Conda environment is gone; nothing needs to be created by hand for the R side.
+`HLAPM_BUILD_REF` follows the standard nf-core pattern for its R dependencies: they are declared once in [`modules/local/hlapm/build_ref/environment.yml`](../modules/local/hlapm/build_ref/environment.yml) (`r-base`, `data.table`, `dplyr`, `stringr`, `seqinr`, `Biostrings`, `rtracklayer`, `DECIPHER`, `bedtools`), which feeds both the module's `conda` directive and the image its `container` directive points at. Build that image once with `scripts/build_image_hlapm.sh`; nothing has to be created by hand for the R side.
 
 HLApm itself is different. It is an unpackaged lab git repository rather than a Conda package, so it cannot be installed from `environment.yml` and reaches the module one of two ways:
 
@@ -340,13 +368,13 @@ Under a container profile `--hlapm_repo` remains available but **optional**: pas
 
 Immediately after `HLAPM` builds the personalized FASTA+GTF references, the pipeline builds a STAR genome index for every allele reference that actually exists under `hlapm/personalized_ref/out/<individual_ID>/*.fa` - the set of alleles indexed is discovered by scanning that output tree directly, not from the HLApm input TSV or the consensus calls, since HLApm can emit reference files for alleles not listed in its own input. Before indexing, allele references are deduplicated by a content hash (sha256 of FASTA+GTF): the same allele often recurs across multiple individuals, and hashing content (rather than trusting the allele name) avoids ever silently merging two different sequences that happen to share a name. See [output docs](output.md#hlapm-star-index) for the resulting `hlapm/star_index/` and `hlapm/star_index_targets/` layout, including how to look up which shared index applies to a given individual/allele via `sample_alleles.csv`.
 
-This step reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to **STAR 2.7.11b** - the same version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's own RNA-seq test data. Unlike arcasHLA/HLA-LA/HLApm above, STAR is **not** expected to already be available in an operator-prepared Conda environment on `$PATH`: run the pipeline with a container profile so Nextflow resolves STAR from the module's pinned container instead:
+This step reuses the [nf-core/modules `STAR_GENOMEGENERATE`](https://github.com/nf-core/modules/tree/master/modules/nf-core/star/genomegenerate) module unmodified, pinned to **STAR 2.7.11b** - the same version used by [nf-core/rnaseq](https://nf-co.re/rnaseq/) to build this pipeline's own RNA-seq test data. Like every other step, STAR comes from the module's own `environment.yml`/`container` pair (see [Dependencies and profiles](#dependencies-and-profiles)) - here a public Biocontainers image, so nothing has to be built locally for it:
 
 ```bash
 -profile singularity
 ```
 
-`docker` works the same way. As a fallback, `-profile conda` lets Nextflow auto-create an isolated Conda environment from the module's pinned `environment.yml` (`bioconda::star=2.7.11b`) at run time instead of using a container; this has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended. This is a deliberate, scoped exception to this pipeline's general early-stage policy of assuming all tools come from an already-active Conda environment - every other step in the pipeline is unaffected.
+`docker` and `apptainer` work the same way. `-profile conda` also works - Nextflow auto-creates an isolated environment from the module's pinned `environment.yml` (`bioconda::star=2.7.11b`) at run time instead of pulling a container - but it has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended.
 
 ### HLApm STAR alignment
 
@@ -370,7 +398,7 @@ Per-allele-level read counts, a cross-sample combined gene-count table, and comp
 
 `HLAPM_QUANTIFY_READS` provisions its own dependencies from
 [`modules/local/hlapm/quantify_reads/environment.yml`](../modules/local/hlapm/quantify_reads/environment.yml),
-which feeds both the module's `conda` directive and the image its `container` directive points at. The previously required operator-prepared `hlapm-quantify` Conda environment is gone; nothing needs to be created by hand.
+which feeds both the module's `conda` directive and the image its `container` directive points at. Build that image once with `scripts/build_image_hlapm_quantify.sh`; nothing has to be created by hand.
 
 `make_a_table_210804_allHLAgenes.py` is unmodified legacy code, so this environment is a deliberately frozen **Python 2.7.15** (the newest Python 2 conda-forge ships) plus:
 
@@ -436,13 +464,13 @@ Independent of `--sample_key`/HLApm, whenever `--rna_samples` is provided the pi
 
 `--rnaseq_strandedness` (default `reverse`) sets the RNA-seq library strandedness passed to featureCounts (`-s`); allowed values are `unstranded`, `forward`, or `reverse`. This is a single pipeline-wide value, not a per-sample `--rna_samples` column - a future cohort needing per-sample strandedness would require revisiting this as a samplesheet column.
 
-This step reuses the `SUBREAD_FEATURECOUNTS` module unmodified, pinned to **Subread 2.1.1**. As with `STAR_GENOMEGENERATE`/`STAR_ALIGN` above, Subread/featureCounts is **not** expected to already be available in an operator-prepared Conda environment on `$PATH`: run the pipeline with a container profile so Nextflow resolves it from the module's pinned container instead:
+This step reuses the `SUBREAD_FEATURECOUNTS` module unmodified, pinned to **Subread 2.1.1**. As with `STAR_GENOMEGENERATE`/`STAR_ALIGN` above, Subread/featureCounts comes from the module's own `environment.yml`/`container` pair - a public Biocontainers image, nothing to build locally:
 
 ```bash
 -profile singularity
 ```
 
-`docker` works the same way. As a fallback, `-profile conda` lets Nextflow auto-create an isolated Conda environment from the module's pinned `environment.yml` (`bioconda::subread=2.1.1`) at run time instead of using a container; this has not been verified as thoroughly on all systems, so `singularity`/`docker` is recommended. This is the same deliberate, scoped exception to this pipeline's general early-stage policy already described for STAR above.
+`docker` and `apptainer` work the same way, and `-profile conda` builds the module's pinned `environment.yml` (`bioconda::subread=2.1.1`) instead - with the same "less thoroughly verified" caveat noted for STAR above.
 
 See [output docs](output.md#whole-genome-common-reference-gene-counts) for the resulting `counts_commonref/` layout. Patching these whole-genome counts with `HLAPM_STAR_QUANTIFY`'s HLA-specific counts (the final splice of the "hijack original count matrix" step) remains explicitly out of scope for this iteration; the per-gene reconciliation diff feeding that future step is produced by [HLA read-count reconciliation diff table](#hla-read-count-reconciliation-diff-table), below.
 
@@ -480,9 +508,7 @@ nextflow run nf-core/hlarnaseq \
     --outdir ./results
 ```
 
-MHC extraction (samtools), read-pair validation, and arcasHLA genotyping each provision their own tools: every one of those steps declares its own `environment.yml`/`conda` directive and a matching pinned `container`, resolved automatically by Nextflow under `-profile conda`/`docker`/`singularity`/`apptainer`. In particular, samtools no longer has to be installed by hand in the active Conda environment; running with none of those profiles fails with an explicit message naming the missing tool.
-
-As of this iteration this is true of **every** local module: all seventeen processes under `modules/local/` declare a `conda` directive backed by an `environment.yml` and a matching pinned `container`, as do all vendored `modules/nf-core/` modules. No pipeline step now falls back to whatever happens to be on the host `$PATH`. An operator-prepared Conda environment is still needed to _launch_ the pipeline (`nextflow`, `nf-core`, `nf-test`), but no longer to run any of its steps.
+Every step provisions its own tools. All seventeen processes under `modules/local/` declare a `conda` directive backed by an `environment.yml` and a matching pinned `container`, as do all vendored `modules/nf-core/` modules — MHC extraction (samtools), read-pair validation and arcasHLA genotyping included. No pipeline step falls back to whatever happens to be on the host `$PATH`; running with none of `-profile conda`/`docker`/`singularity`/`apptainer` fails with an explicit message naming the missing tool. See [Dependencies and profiles](#dependencies-and-profiles).
 
 > [!NOTE]
 > `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.
