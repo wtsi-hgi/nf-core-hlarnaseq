@@ -2,6 +2,16 @@ process HLALA_COMBINE {
     tag "HLA-LA_combined"
     label 'process_single'
 
+    // Shared environment, not module-local: see containers/datatools/README.md
+    // ("The shell-only consumers"). This script is pure shell - bash, coreutils
+    // and awk come from the image's Debian base under docker/singularity and
+    // from the host under -profile conda; the directives are here so the module
+    // declares a reproducible environment rather than none at all.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.1' }"
+
     publishDir "${params.outdir}/hlala",
         mode: params.publish_dir_mode,
         saveAs: { filename -> filename == 'versions.yml' ? null : filename }

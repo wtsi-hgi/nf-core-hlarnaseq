@@ -11,6 +11,14 @@ process HLA_READCOUNT_RECONCILE_DIFF {
     tag "${meta.id}"
     label 'process_single'
 
+    // Shared python3 + R environment, not module-local: see
+    // containers/datatools/README.md. bin/reconcile_hla_readcounts.py needs
+    // python3 and pandas, both of which that environment already pins.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.1' }"
+
     // No module-level publishDir here (matches COUNTS_COMMONREF_HLA_REFORMAT's
     // own precedent): this process's publish path varies per sample
     // (${meta.id}), which requires a closure-deferred path - a top-level,

@@ -11,7 +11,7 @@ process HLA_CONSENSUS {
     conda "${projectDir}/containers/datatools/environment.yml"
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         "${projectDir}/containers/datatools/datatools.sif" :
-        'quay.io/hlarnaseq/datatools:1.0' }"
+        'quay.io/hlarnaseq/datatools:1.1' }"
 
     publishDir "${params.outdir}/hla_consensus",
         mode: params.publish_dir_mode,

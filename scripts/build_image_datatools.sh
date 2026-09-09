@@ -8,12 +8,16 @@ Usage:
 
 Builds the shared python3 + R data-tools image locally, so the `container`
 directive of every module that runs one of this pipeline's own bin/ analysis
-scripts resolves with no registry push required:
+scripts - or one of its small inline-shell data-shuffling steps - resolves with
+no registry push required:
 
-  HLA_CONSENSUS, HLAPM_PREPARE_INPUT, ARCASHLA_COMBINE, HLAPM_SUMMARIZE_READCOUNTS
+  HLA_CONSENSUS, HLAPM_PREPARE_INPUT, ARCASHLA_COMBINE, HLAPM_SUMMARIZE_READCOUNTS,
+  HLA_READCOUNT_RECONCILE_DIFF, COUNTS_COMMONREF_HLA_REFORMAT, HLALA_COMBINE,
+  HIBAG_COMBINE, HLAPM_COMBINE_GTF, HLAPM_LIST_STAR_TARGETS,
+  HLAPM_RESOLVE_SAMPLE_ALLELES
 
   - Docker: builds and tags the image as IMAGE_TAG (default
-    quay.io/hlarnaseq/datatools:1.0 - matching nextflow.config's
+    quay.io/hlarnaseq/datatools:1.1 - matching nextflow.config's
     docker.registry, so Docker finds it locally under -profile docker without
     ever attempting a network pull).
   - Singularity/Apptainer: if `singularity` or `apptainer` is also available,
@@ -27,10 +31,10 @@ scripts resolves with no registry push required:
 Unlike the other build_image_*.sh scripts here, this image is shared rather
 than module-local; see containers/datatools/README.md. If you change
 containers/datatools/environment.yml, bump IMAGE_TAG below AND the `container`
-directive in all four modules above so a tag always means one set of contents.
+directive in all eleven modules above so a tag always means one set of contents.
 
 Environment:
-  IMAGE_TAG   Docker image reference to build/tag. Default: quay.io/hlarnaseq/datatools:1.0
+  IMAGE_TAG   Docker image reference to build/tag. Default: quay.io/hlarnaseq/datatools:1.1
   SIF_PATH    Output path for the converted Singularity image. Default: containers/datatools/datatools.sif
 EOF
 }
@@ -42,7 +46,7 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTAINER_DIR="${ROOT_DIR}/containers/datatools"
-IMAGE_TAG="${IMAGE_TAG:-quay.io/hlarnaseq/datatools:1.0}"
+IMAGE_TAG="${IMAGE_TAG:-quay.io/hlarnaseq/datatools:1.1}"
 SIF_PATH="${SIF_PATH:-${CONTAINER_DIR}/datatools.sif}"
 
 command -v docker >/dev/null 2>&1 || {

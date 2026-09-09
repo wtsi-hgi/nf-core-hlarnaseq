@@ -2,6 +2,17 @@ process COUNTS_COMMONREF_HLA_REFORMAT {
     tag "${meta.id}"
     label 'process_single'
 
+    // Shared python3 + R environment, not module-local: see
+    // containers/datatools/README.md. This is the module that made that
+    // environment carry samtools as well - it needs samtools and python3
+    // together, and no prebuilt public image pairs them. The samtools pin
+    // there (1.24) matches ARCASHLA_EXTRACT's and the vendored
+    // SAMTOOLS_SORT's, so this adds no new samtools version to the pipeline.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.1' }"
+
     // No module-level publishDir here (unlike e.g. ARCASHLA_EXTRACT/
     // HLA_CONSENSUS's static, meta-independent directories): this process's
     // publish path varies per sample (${meta.id}), which requires a

@@ -2,6 +2,17 @@ process HLAPM_LIST_STAR_TARGETS {
     tag "hlapm_list_star_targets"
     label 'process_single'
 
+    // Shared environment, not module-local: see containers/datatools/README.md
+    // ("The shell-only consumers"). This is the shell-heaviest of the five -
+    // bash associative arrays, process substitution, sha256sum and `find -L`
+    // are all needed below - so containers/datatools/Dockerfile asserts each of
+    // them at image build time rather than letting a base-image change surface
+    // here as a mid-run failure.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.1' }"
+
     publishDir "${params.outdir}/hlapm/star_index_targets",
         mode: params.publish_dir_mode,
         // publishDir's saveAs receives the top-level published name for a

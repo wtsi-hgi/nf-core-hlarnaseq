@@ -90,6 +90,15 @@ process ARCASHLA_EXTRACT {
     printf '@stub_read/1\\nACGT\\n+\\nIIII\\n' | gzip -c > "${meta.id}.mhc_1.fq.gz"
     printf '@stub_read/2\\nACGT\\n+\\nIIII\\n' | gzip -c > "${meta.id}.mhc_2.fq.gz"
 
+    # An empty touch, unlike the two FASTQs above: nothing under -stub-run
+    # reads this BAM's content. Its only consumer is SUBREAD_FEATURECOUNTS_HLA,
+    # whose own vendored stub: block never opens its inputs, and
+    # COUNTS_COMMONREF_HLA_REFORMAT's stub: block exists precisely because that
+    # chain hands on empty placeholders (see the comment there). The output is
+    # declared, so it must exist or the stub run fails with "Missing output
+    # file(s)".
+    touch "${meta.id}.mhc.namesort.bam"
+
     # Hardcoded rather than parsed: environment.yml pins this module to exactly
     # samtools 1.24. Bump both together if that pin ever changes. Left unquoted
     # to match exactly what the script: block's `samtools --version` parse

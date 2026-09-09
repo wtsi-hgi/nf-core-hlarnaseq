@@ -2,6 +2,15 @@ process HLAPM_RESOLVE_SAMPLE_ALLELES {
     tag "hlapm_resolve_sample_alleles"
     label 'process_single'
 
+    // Shared environment, not module-local: see containers/datatools/README.md
+    // ("The shell-only consumers"). Pure shell (bash associative arrays), same
+    // rationale as HLAPM_LIST_STAR_TARGETS, whose sample_alleles.csv this
+    // consumes.
+    conda "${projectDir}/containers/datatools/environment.yml"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        "${projectDir}/containers/datatools/datatools.sif" :
+        'quay.io/hlarnaseq/datatools:1.1' }"
+
     publishDir "${params.outdir}/hlapm/star_align",
         mode: params.publish_dir_mode,
         // Unlike HLAPM_LIST_STAR_TARGETS's internal unique_alleles/ copies,
