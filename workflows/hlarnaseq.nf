@@ -34,77 +34,59 @@ workflow HLARNASEQ {
     main:
 
     ch_versions = channel.empty()
+    // Only genuinely optional channels need an empty placeholder here: HIBAG
+    // runs only under --array_samples. Everything else below is unconditional,
+    // because RNA analysis is what this pipeline is for - --rna_samples,
+    // --sample_key, --gtf and --arcashla_reference_dir are all required
+    // parameters (see nextflow_schema.json), so nf-schema rejects a run that
+    // omits any of them before any of this code executes.
+    ch_hibag_calls = channel.empty()
+    ch_hibag_posterior = channel.empty()
+
+    // Passed down as a value channel so ARCASHLA_GENOTYPE stages the
+    // prepared reference directory as a real process input - which is what
+    // makes Nextflow bind its real path into the container - and reuses it
+    // for every sample instead of consuming it on the first one.
+    ch_arcashla_reference = Channel.value(file(params.arcashla_reference_dir, checkIfExists: true))
+    ARCASHLA(ch_rna_samplesheet, ch_arcashla_reference)
+    ch_versions = ch_versions.mix(ARCASHLA.out.versions)
+    ch_arcashla_reads = ARCASHLA.out.reads
+    ch_arcashla_validation_logs = ARCASHLA.out.validation_logs
+    ch_arcashla_genotypes = ARCASHLA.out.genotypes
+    ch_arcashla_genotype_logs = ARCASHLA.out.genotype_logs
+    ch_arcashla_combined_genotype = ARCASHLA.out.combined_genotype
+
+    // Runs on the sample's original whole-genome BAM (--rna_samples'
+    // bam/bai columns), independent of --sample_key/HLApm - iteration 1
+    // of "hijack original count matrix" (see docs/output.md).
+    // SUBREAD_FEATURECOUNTS reports its own version via the topic-based
+    // versions channel (like STAR_ALIGN/STAR_GENOMEGENERATE/SAMTOOLS_SORT
+    // elsewhere in this pipeline), collected automatically below -
+    // COUNTS_COMMONREF has no other module and so emits no versions
+    // channel of its own to mix in here.
+    ch_gtf = Channel.value(file(params.gtf, checkIfExists: true))
+    COUNTS_COMMONREF(ch_rna_samplesheet, ch_gtf)
+    ch_counts_commonref_gene_counts = COUNTS_COMMONREF.out.gene_counts
+    ch_counts_commonref_summary = COUNTS_COMMONREF.out.summary
+
+    // Iteration 2 of "hijack original count matrix" (see docs/output.md):
+    // per-read featureCounts reconciliation input, run once per RNA
+    // sample against the HLA-region-restricted subset of that sample's
+    // original/common-reference BAM. Unlike COUNTS_COMMONREF above
+    // (deliberately independent of/parallel to ARCASHLA), this step
+    // consumes ARCASHLA_EXTRACT's own intermediate HLA-region BAM
+    // (ARCASHLA.out.hla_region_bam), so it must run after ARCASHLA - an
+    // intentional, necessary ordering dependency introduced by reusing
+    // that intermediate rather than re-extracting the HLA region again.
+    COUNTS_COMMONREF_HLA(ARCASHLA.out.hla_region_bam, ch_gtf)
+    ch_versions = ch_versions.mix(COUNTS_COMMONREF_HLA.out.versions)
+    ch_counts_commonref_hla_read_gene_assignments = COUNTS_COMMONREF_HLA.out.read_gene_assignments
+
     // Genotype-side HLA calls in the `sample_id/Locus/HLA_allele` contract.
     // Filled by HLA-LA (from WGS) or by HIBAG (from SNP arrays) - the two are
     // mutually exclusive - or left as the header-only placeholder when
     // neither input is given. The name is historical: HLALA_COMBINE defined
     // this format, and HIBAG_COMBINE reproduces it exactly.
-    ch_hlala_combined = channel.empty()
-    ch_hibag_calls = channel.empty()
-    ch_hibag_posterior = channel.empty()
-    ch_arcashla_reads = channel.empty()
-    ch_arcashla_validation_logs = channel.empty()
-    ch_arcashla_genotypes = channel.empty()
-    ch_arcashla_genotype_logs = channel.empty()
-    ch_arcashla_combined_genotype = channel.empty()
-    ch_hla_consensus_summary = channel.empty()
-    ch_hla_consensus_key = channel.empty()
-    ch_hlapm_personalized_ref = channel.empty()
-    ch_hlapm_star_index = channel.empty()
-    ch_hlapm_star_index_gtf = channel.empty()
-    ch_hlapm_star_index_sample_alleles = channel.empty()
-    ch_hlapm_star_align_bam = channel.empty()
-    ch_hlapm_star_align_log_final = channel.empty()
-    ch_hlapm_star_align_rna_sample_alleles = channel.empty()
-    ch_hlapm_edit_distance = channel.empty()
-    ch_hlapm_gene_summary = channel.empty()
-    ch_counts_commonref_gene_counts = channel.empty()
-    ch_counts_commonref_summary = channel.empty()
-    ch_counts_commonref_hla_read_gene_assignments = channel.empty()
-    ch_hla_readcount_diff = channel.empty()
-    ch_hla_readcount_diff_warnings = channel.empty()
-
-    if (params.rna_samples) {
-        // Passed down as a value channel so ARCASHLA_GENOTYPE stages the
-        // prepared reference directory as a real process input - which is what
-        // makes Nextflow bind its real path into the container - and reuses it
-        // for every sample instead of consuming it on the first one.
-        ch_arcashla_reference = Channel.value(file(params.arcashla_reference_dir, checkIfExists: true))
-        ARCASHLA(ch_rna_samplesheet, ch_arcashla_reference)
-        ch_versions = ch_versions.mix(ARCASHLA.out.versions)
-        ch_arcashla_reads = ARCASHLA.out.reads
-        ch_arcashla_validation_logs = ARCASHLA.out.validation_logs
-        ch_arcashla_genotypes = ARCASHLA.out.genotypes
-        ch_arcashla_genotype_logs = ARCASHLA.out.genotype_logs
-        ch_arcashla_combined_genotype = ARCASHLA.out.combined_genotype
-
-        // Runs on the sample's original whole-genome BAM (--rna_samples'
-        // bam/bai columns), independent of --sample_key/HLApm - iteration 1
-        // of "hijack original count matrix" (see docs/output.md).
-        // SUBREAD_FEATURECOUNTS reports its own version via the topic-based
-        // versions channel (like STAR_ALIGN/STAR_GENOMEGENERATE/SAMTOOLS_SORT
-        // elsewhere in this pipeline), collected automatically below -
-        // COUNTS_COMMONREF has no other module and so emits no versions
-        // channel of its own to mix in here.
-        ch_gtf = Channel.value(file(params.gtf))
-        COUNTS_COMMONREF(ch_rna_samplesheet, ch_gtf)
-        ch_counts_commonref_gene_counts = COUNTS_COMMONREF.out.gene_counts
-        ch_counts_commonref_summary = COUNTS_COMMONREF.out.summary
-
-        // Iteration 2 of "hijack original count matrix" (see docs/output.md):
-        // per-read featureCounts reconciliation input, run once per RNA
-        // sample against the HLA-region-restricted subset of that sample's
-        // original/common-reference BAM. Unlike COUNTS_COMMONREF above
-        // (deliberately independent of/parallel to ARCASHLA), this step
-        // consumes ARCASHLA_EXTRACT's own intermediate HLA-region BAM
-        // (ARCASHLA.out.hla_region_bam), so it must run after ARCASHLA - an
-        // intentional, necessary ordering dependency introduced by reusing
-        // that intermediate rather than re-extracting the HLA region again.
-        COUNTS_COMMONREF_HLA(ARCASHLA.out.hla_region_bam, ch_gtf)
-        ch_versions = ch_versions.mix(COUNTS_COMMONREF_HLA.out.versions)
-        ch_counts_commonref_hla_read_gene_assignments = COUNTS_COMMONREF_HLA.out.read_gene_assignments
-    }
-
     if (params.wgs_samples) {
         HLALA(ch_wgs_samplesheet)
         ch_versions = ch_versions.mix(HLALA.out.versions)
@@ -119,68 +101,65 @@ workflow HLARNASEQ {
         ch_hlala_combined = Channel.fromPath("${projectDir}/assets/NO_WGS_HLALA_COMBINED.tsv")
     }
 
-    if (params.rna_samples && params.sample_key) {
-        ch_rna_excluded_samples = params.rna_excluded_samples
-            ? Channel.fromPath(params.rna_excluded_samples)
-            : Channel.fromPath("${projectDir}/assets/NO_FILE")
-        ch_wgs_excluded_samples = params.wgs_excluded_samples
-            ? Channel.fromPath(params.wgs_excluded_samples)
-            : Channel.fromPath("${projectDir}/assets/NO_FILE")
+    ch_rna_excluded_samples = params.rna_excluded_samples
+        ? Channel.fromPath(params.rna_excluded_samples)
+        : Channel.fromPath("${projectDir}/assets/NO_FILE")
+    ch_wgs_excluded_samples = params.wgs_excluded_samples
+        ? Channel.fromPath(params.wgs_excluded_samples)
+        : Channel.fromPath("${projectDir}/assets/NO_FILE")
 
-        HLA_CONSENSUS(
-            ch_arcashla_combined_genotype,
-            ch_hlala_combined,
-            ch_sample_key,
-            ch_rna_excluded_samples,
-            ch_wgs_excluded_samples
-        )
-        ch_versions = ch_versions.mix(HLA_CONSENSUS.out.versions)
-        ch_hla_consensus_summary = HLA_CONSENSUS.out.summary
-        ch_hla_consensus_key = HLA_CONSENSUS.out.consensus
+    HLA_CONSENSUS(
+        ch_arcashla_combined_genotype,
+        ch_hlala_combined,
+        ch_sample_key,
+        ch_rna_excluded_samples,
+        ch_wgs_excluded_samples
+    )
+    ch_versions = ch_versions.mix(HLA_CONSENSUS.out.versions)
+    ch_hla_consensus_summary = HLA_CONSENSUS.out.summary
+    ch_hla_consensus_key = HLA_CONSENSUS.out.consensus
 
-        HLAPM(ch_hla_consensus_key)
-        ch_versions = ch_versions.mix(HLAPM.out.versions)
-        ch_hlapm_personalized_ref = HLAPM.out.personalized_ref
+    HLAPM(ch_hla_consensus_key)
+    ch_versions = ch_versions.mix(HLAPM.out.versions)
+    ch_hlapm_personalized_ref = HLAPM.out.personalized_ref
 
-        HLAPM_STAR_INDEX(ch_hlapm_personalized_ref)
-        ch_versions = ch_versions.mix(HLAPM_STAR_INDEX.out.versions)
-        ch_hlapm_star_index = HLAPM_STAR_INDEX.out.index
-        ch_hlapm_star_index_gtf = HLAPM_STAR_INDEX.out.gtf
-        ch_hlapm_star_index_sample_alleles = HLAPM_STAR_INDEX.out.sample_alleles
+    HLAPM_STAR_INDEX(ch_hlapm_personalized_ref)
+    ch_versions = ch_versions.mix(HLAPM_STAR_INDEX.out.versions)
+    ch_hlapm_star_index = HLAPM_STAR_INDEX.out.index
+    ch_hlapm_star_index_gtf = HLAPM_STAR_INDEX.out.gtf
+    ch_hlapm_star_index_sample_alleles = HLAPM_STAR_INDEX.out.sample_alleles
 
-        HLAPM_STAR_ALIGN(
-            ch_hlapm_star_index_sample_alleles,
-            ch_hlapm_star_index,
-            ch_hlapm_star_index_gtf,
-            ch_arcashla_reads,
-            ch_sample_key
-        )
-        ch_versions = ch_versions.mix(HLAPM_STAR_ALIGN.out.versions)
-        ch_hlapm_star_align_bam = HLAPM_STAR_ALIGN.out.bam_sorted
-        ch_hlapm_star_align_log_final = HLAPM_STAR_ALIGN.out.log_final
-        ch_hlapm_star_align_rna_sample_alleles = HLAPM_STAR_ALIGN.out.rna_sample_alleles
+    HLAPM_STAR_ALIGN(
+        ch_hlapm_star_index_sample_alleles,
+        ch_hlapm_star_index,
+        ch_hlapm_star_index_gtf,
+        ch_arcashla_reads,
+        ch_sample_key
+    )
+    ch_versions = ch_versions.mix(HLAPM_STAR_ALIGN.out.versions)
+    ch_hlapm_star_align_bam = HLAPM_STAR_ALIGN.out.bam_sorted
+    ch_hlapm_star_align_log_final = HLAPM_STAR_ALIGN.out.log_final
+    ch_hlapm_star_align_rna_sample_alleles = HLAPM_STAR_ALIGN.out.rna_sample_alleles
 
-        HLAPM_STAR_QUANTIFY(ch_hlapm_star_align_bam, ch_hlapm_star_index_gtf)
-        ch_versions = ch_versions.mix(HLAPM_STAR_QUANTIFY.out.versions)
-        ch_hlapm_edit_distance = HLAPM_STAR_QUANTIFY.out.edit_distance
-        ch_hlapm_gene_summary = HLAPM_STAR_QUANTIFY.out.gene_summary
+    HLAPM_STAR_QUANTIFY(ch_hlapm_star_align_bam, ch_hlapm_star_index_gtf)
+    ch_versions = ch_versions.mix(HLAPM_STAR_QUANTIFY.out.versions)
+    ch_hlapm_edit_distance = HLAPM_STAR_QUANTIFY.out.edit_distance
+    ch_hlapm_gene_summary = HLAPM_STAR_QUANTIFY.out.gene_summary
 
-        // Iteration 3 of "hijack original count matrix" (see docs/output.md):
-        // reconciles iteration 2's local, HLA-region-restricted featureCounts
-        // read-gene-assignment table (ch_counts_commonref_hla_read_gene_assignments,
-        // from the earlier, unconditional `if (params.rna_samples)` block)
-        // against this sample's own personalized-HLA per-read quantification
-        // (ch_hlapm_edit_distance, just produced above), emitting a per-sample
-        // diff table. Both required inputs are available by this point in the
-        // workflow. Only RNA samples resolved through --sample_key/HLApm to
-        // at least one personalized allele - i.e. present in
-        // ch_hlapm_edit_distance - get a diff table (inner join on rna_id,
-        // performed inside HLA_READCOUNT_RECONCILE itself).
-        HLA_READCOUNT_RECONCILE(ch_counts_commonref_hla_read_gene_assignments, ch_hlapm_edit_distance, ch_gtf)
-        ch_versions = ch_versions.mix(HLA_READCOUNT_RECONCILE.out.versions)
-        ch_hla_readcount_diff = HLA_READCOUNT_RECONCILE.out.read_count_diff
-        ch_hla_readcount_diff_warnings = HLA_READCOUNT_RECONCILE.out.gene_id_resolution_warnings
-    }
+    // Iteration 3 of "hijack original count matrix" (see docs/output.md):
+    // reconciles iteration 2's local, HLA-region-restricted featureCounts
+    // read-gene-assignment table (ch_counts_commonref_hla_read_gene_assignments,
+    // produced by COUNTS_COMMONREF_HLA above) against this sample's own
+    // personalized-HLA per-read quantification (ch_hlapm_edit_distance, just
+    // produced above), emitting a per-sample diff table. Both required inputs
+    // are available by this point in the workflow. Only RNA samples resolved
+    // through --sample_key/HLApm to at least one personalized allele - i.e.
+    // present in ch_hlapm_edit_distance - get a diff table (inner join on
+    // rna_id, performed inside HLA_READCOUNT_RECONCILE itself).
+    HLA_READCOUNT_RECONCILE(ch_counts_commonref_hla_read_gene_assignments, ch_hlapm_edit_distance, ch_gtf)
+    ch_versions = ch_versions.mix(HLA_READCOUNT_RECONCILE.out.versions)
+    ch_hla_readcount_diff = HLA_READCOUNT_RECONCILE.out.read_count_diff
+    ch_hla_readcount_diff_warnings = HLA_READCOUNT_RECONCILE.out.gene_id_resolution_warnings
 
     //
     // Collate and save software versions

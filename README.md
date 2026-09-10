@@ -37,11 +37,16 @@ The pipeline can use results of [NF-Core RNASeq](https://nf-co.re/rnaseq/latest)
 
 Provide an RNA samplesheet with the exact columns `rna_id,bam,bai,unpaired_r1,unpaired_r2`. The requested HLA region is passed to samtools unchanged, so its chromosome notation must match the BAM headers.
 
+RNA-seq HLA quantification is what the pipeline does, so `--rna_samples`, `--sample_key`, `--hla_region`, `--gtf` and `--arcashla_reference_dir` are all required; a run that omits any of them stops immediately at parameter validation. A `--sample_key` with a header only is valid and routes every RNA sample through the `RNA_ONLY:<rna_id>` consensus fallback.
+
 ```bash
 nextflow run wtsi-hgi/hlarnaseq \
    -profile singularity \
    --rna_samples rna_samples.csv \
+   --sample_key rna_wgs_key.csv \
    --hla_region chr6:28500000-33400000 \
+   --gtf /path/to/annotation.gtf \
+   --arcashla_reference_dir /path/to/arcashla_reference \
    --outdir <OUTDIR>
 ```
 
@@ -62,10 +67,12 @@ The genotype-side HLA calls are optional and come from one of two sources. Use `
 nextflow run wtsi-hgi/hlarnaseq \
    -profile singularity \
    --rna_samples rna_samples.csv \
+   --sample_key rna_wgs_key.csv \
    --hla_region chr6:28500000-33400000 \
+   --gtf /path/to/annotation.gtf \
+   --arcashla_reference_dir /path/to/arcashla_reference \
    --array_samples array_samples.csv \
    --hibag_model /path/to/HIBAG_model.RData \
-   --sample_key rna_wgs_key.csv \
    --outdir <OUTDIR>
 ```
 

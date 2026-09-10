@@ -10,12 +10,7 @@
             "type": "object",
             "fa_icon": "fas fa-terminal",
             "description": "Define where the pipeline should find input data and save output data.",
-            "required": [
-                "rna_samples",
-                "hla_region",
-                "outdir",
-                "sample_key"
-            ],
+            "required": ["rna_samples", "hla_region", "outdir", "sample_key"],
             "properties": {
                 "rna_samples": {
                     "type": "string",
@@ -25,7 +20,7 @@
                     "mimetype": "text/csv",
                     "pattern": "^\\S+\\.csv$",
                     "description": "Path to the RNA samplesheet containing indexed BAMs and paired unaligned reads.",
-                    "help_text": "CSV file with the exact columns rna_id,bam,bai,unpaired_r1,unpaired_r2. See [usage docs](https://nf-co.re/hlarnaseq/usage#rna-samplesheet-input).",
+                    "help_text": "Required top-level input: RNA-seq HLA quantification is what this pipeline does, so every stage runs off it. CSV file with the exact columns rna_id,bam,bai,unpaired_r1,unpaired_r2. See [usage docs](https://nf-co.re/hlarnaseq/usage#rna-samplesheet-input).",
                     "fa_icon": "fas fa-file-csv"
                 },
                 "hla_region": {
@@ -136,6 +131,7 @@
             "type": "object",
             "fa_icon": "fas fa-dna",
             "description": "Reference genome related files and options required for the workflow.",
+            "required": ["gtf", "arcashla_reference_dir"],
             "properties": {
                 "genome": {
                     "type": "string",
@@ -179,12 +175,7 @@
                 "hibag_match_type": {
                     "type": "string",
                     "default": "RefSNP+Position",
-                    "enum": [
-                        "Position",
-                        "Pos+Allele",
-                        "RefSNP+Position",
-                        "RefSNP"
-                    ],
+                    "enum": ["Position", "Pos+Allele", "RefSNP+Position", "RefSNP"],
                     "description": "How HIBAG matches model SNPs to the array genotypes.",
                     "help_text": "Passed to HIBAG::hlaPredict(). The default is strict and correct when the model was built against the same manifest and assembly as the data. If the run fails reporting that no model SNPs match, the error lists how many SNPs each criterion would find - 'RefSNP' is the most forgiving and is the usual fix for a model whose coordinates are offset from your manifest.",
                     "fa_icon": "fas fa-code-branch"
@@ -192,11 +183,7 @@
                 "hibag_assembly": {
                     "type": "string",
                     "default": "hg19",
-                    "enum": [
-                        "hg18",
-                        "hg19",
-                        "hg38"
-                    ],
+                    "enum": ["hg18", "hg19", "hg38"],
                     "description": "Genome assembly of the SNP-array genotypes, passed to HIBAG::hlaBED2Geno().",
                     "help_text": "Must match the assembly the pre-fit model was built on. Published HIBAG models are commonly hg19, as are most Illumina array manifests.",
                     "fa_icon": "fas fa-map-marker-alt"
@@ -230,7 +217,7 @@
                     "format": "directory-path",
                     "exists": true,
                     "description": "Path to a local, pre-cloned checkout of the HLApm repository (https://github.com/davenportlab/HLApm). Optional under a container profile; required without one.",
-                    "help_text": "This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. Under `-profile docker`/`singularity`/`apptainer`, `HLAPM_BUILD_REF`'s image already contains HLApm at a pinned commit (build it once with `scripts/build_image_hlapm.sh`), so this parameter is only needed to override that baked-in copy with a patched or newer checkout. Without a container engine (`-profile conda`, or no profile), HLApm cannot be provisioned automatically - Conda can install its R dependencies but not a git checkout - so this parameter is mandatory whenever `--rna_samples` and `--sample_key` are provided. The pipeline never clones or fetches HLApm at runtime; any checkout passed here (including its bundled reference data) must be prepared by the operator beforehand.",
+                    "help_text": "This path is used as `HLAPM_HOME` when running HLApm's `bulkRNA_build_personalized_HLA_ref()`. Under `-profile docker`/`singularity`/`apptainer`, `HLAPM_BUILD_REF`'s image already contains HLApm at a pinned commit (build it once with `scripts/build_image_hlapm.sh`), so this parameter is only needed to override that baked-in copy with a patched or newer checkout. Without a container engine (`-profile conda`, or no profile), HLApm cannot be provisioned automatically - Conda can install its R dependencies but not a git checkout - so this parameter is mandatory. The pipeline never clones or fetches HLApm at runtime; any checkout passed here (including its bundled reference data) must be prepared by the operator beforehand.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "gtf": {
@@ -240,7 +227,7 @@
                     "mimetype": "text/plain",
                     "pattern": "^\\S+\\.gtf(\\.gz)?$",
                     "description": "Path to the whole-genome reference GTF used for per-sample featureCounts quantification.",
-                    "help_text": "Required whenever `--rna_samples` is provided. Passed to SUBREAD_FEATURECOUNTS as the annotation file run once per RNA sample against that sample's existing whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns), producing a per-sample whole-genome gene-count table. This is distinct from HLApm's per-allele GTFs, which cover only genotyped HLA alleles.",
+                    "help_text": "Required. Passed to SUBREAD_FEATURECOUNTS as the annotation file run once per RNA sample against that sample's existing whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns), producing a per-sample whole-genome gene-count table. This is distinct from HLApm's per-allele GTFs, which cover only genotyped HLA alleles.",
                     "fa_icon": "far fa-file-code"
                 },
                 "arcashla_genes": {
@@ -255,7 +242,7 @@
                     "format": "directory-path",
                     "exists": true,
                     "description": "Path to a pre-built arcasHLA reference directory (IMGT/HLA + kallisto index).",
-                    "help_text": "Required whenever `--rna_samples` is provided. arcasHLA has no option to point `genotype` at an external reference at runtime, so `ARCASHLA_GENOTYPE` takes this directory as a staged process input (which is what makes container engines bind-mount it automatically) and symlinks it into place as its own `dat/ref` at task start. It may therefore live on any filesystem the executor can read, with no manual bind flags. Build it once with `scripts/build_arcashla_reference.sh`; the pipeline checks at launch that the directory really contains a built reference (`hla.idx`, `hla.p.json`), not just that it exists.",
+                    "help_text": "Required. arcasHLA has no option to point `genotype` at an external reference at runtime, so `ARCASHLA_GENOTYPE` takes this directory as a staged process input (which is what makes container engines bind-mount it automatically) and symlinks it into place as its own `dat/ref` at task start. It may therefore live on any filesystem the executor can read, with no manual bind flags. Build it once with `scripts/build_arcashla_reference.sh`; the pipeline checks at launch that the directory really contains a built reference (`hla.idx`, `hla.p.json`), not just that it exists.",
                     "fa_icon": "fas fa-folder-tree"
                 },
                 "igenomes_ignore": {
@@ -342,14 +329,7 @@
                     "description": "Method used to save pipeline results to output directory.",
                     "help_text": "The Nextflow `publishDir` option specifies which intermediate files should be saved to the output directory. This option tells the pipeline what method should be used to move these files. See [Nextflow docs](https://www.nextflow.io/docs/latest/process.html#publishdir) for details.",
                     "fa_icon": "fas fa-copy",
-                    "enum": [
-                        "symlink",
-                        "rellink",
-                        "link",
-                        "copy",
-                        "copyNoFollow",
-                        "move"
-                    ],
+                    "enum": ["symlink", "rellink", "link", "copy", "copyNoFollow", "move"],
                     "hidden": true
                 },
                 "email_on_fail": {
@@ -400,10 +380,7 @@
                     "hidden": true
                 },
                 "help": {
-                    "type": [
-                        "boolean",
-                        "string"
-                    ],
+                    "type": ["boolean", "string"],
                     "description": "Display the help message."
                 },
                 "help_full": {

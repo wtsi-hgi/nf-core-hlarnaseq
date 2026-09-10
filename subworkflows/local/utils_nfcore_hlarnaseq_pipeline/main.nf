@@ -74,7 +74,7 @@ workflow PIPELINE_INITIALISATION {
 * Software dependencies
     https://github.com/nf-core/hlarnaseq/blob/master/CITATIONS.md
 """
-    command = "nextflow run ${workflow.manifest.name} --rna_samples rna_samples.csv --hla_region chr6:28500000-33400000 --outdir <OUTDIR>"
+    command = "nextflow run ${workflow.manifest.name} --rna_samples rna_samples.csv --sample_key rna_wgs_key.csv --hla_region chr6:28500000-33400000 --gtf annotation.gtf --arcashla_reference_dir arcashla_reference/ --outdir <OUTDIR>"
 
     UTILS_NFSCHEMA_PLUGIN (
         workflow,
@@ -173,12 +173,11 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from RNA/WGS sample key provided through params.sample_key
     //
-    if (sample_key) {
-        validateSampleKeyHeader(sample_key)
-        ch_sample_key = channel.fromPath(sample_key)
-    } else {
-        ch_sample_key = channel.empty()
-    }
+    // Unconditional: --sample_key is a required parameter (see
+    // nextflow_schema.json), like --rna_samples above.
+    //
+    validateSampleKeyHeader(sample_key)
+    ch_sample_key = channel.fromPath(sample_key)
 
     emit:
     rna_samplesheet   = ch_rna_samplesheet
@@ -249,7 +248,6 @@ def validateInputParameters() {
     hibagModelExistsError()
     hlapmRepoExistsError()
     arcashlaReferenceDirExistsError()
-    gtfExistsError()
 }
 
 //
@@ -513,7 +511,7 @@ def hlalaGraphDirExistsError() {
     }
 }
 //
-// Exit pipeline if RNA/sample-key inputs are provided without any source of HLApm
+// Exit pipeline if there is no source of HLApm at all
 //
 // HLApm is an unpackaged git repository, so it can only reach HLAPM_BUILD_REF
 // two ways: baked into the module's container image (built by
@@ -524,32 +522,35 @@ def hlalaGraphDirExistsError() {
 // workflow.containerEngine is null under -profile conda and under no profile
 // at all, which is exactly the set of runs that need a host checkout.
 //
+// HLAPM_BUILD_REF always runs (it is downstream of the unconditional
+// HLA_CONSENSUS), so this depends only on whether a container engine is in
+// play - a runtime fact JSON Schema cannot see, which is why --hlapm_repo
+// stays a Groovy check rather than moving to the schema's `required` array.
+//
 def hlapmRepoExistsError() {
-    if (params.rna_samples && params.sample_key && !params.hlapm_repo && !workflow.containerEngine) {
-        error("Please provide --hlapm_repo when using --rna_samples and --sample_key without a container profile, so HLApm can find its prepared repository checkout. Alternatively run with -profile docker, singularity, or apptainer, whose image bakes HLApm in (build it once with scripts/build_image_hlapm.sh).")
+    if (!params.hlapm_repo && !workflow.containerEngine) {
+        error("Please provide --hlapm_repo when running without a container profile, so HLApm can find its prepared repository checkout. Alternatively run with -profile docker, singularity, or apptainer, whose image bakes HLApm in (build it once with scripts/build_image_hlapm.sh).")
     }
 
-    if (params.rna_samples && params.sample_key && params.hlapm_repo && !file(params.hlapm_repo).exists()) {
+    if (params.hlapm_repo && !file(params.hlapm_repo).exists()) {
         error("Please check --hlapm_repo -> Directory does not exist: ${params.hlapm_repo}")
     }
 }
 //
-// Exit pipeline if RNA inputs are provided without a prepared arcasHLA reference directory
+// Exit pipeline if --arcashla_reference_dir does not hold a fully built reference
+//
+// Presence and existence are enforced by nextflow_schema.json instead
+// (`required` + `format: directory-path` + `exists: true`), which gives the
+// standard nf-schema `Missing required parameter(s)` message. Only the content
+// check below is left here, because JSON Schema cannot express "this directory
+// contains a built reference".
 //
 def arcashlaReferenceDirExistsError() {
-    if (params.rna_samples && !params.arcashla_reference_dir) {
-        error("Please provide --arcashla_reference_dir when using --rna_samples so ARCASHLA_GENOTYPE can find its prepared reference (build one with scripts/build_arcashla_reference.sh).")
-    }
-
-    if (params.rna_samples && !file(params.arcashla_reference_dir).exists()) {
-        error("Please check --arcashla_reference_dir -> Directory does not exist: ${params.arcashla_reference_dir}")
-    }
-
     // Existence alone is not enough: `scripts/build_arcashla_reference.sh`
     // creates its output directory before it does any work, so a build that
     // aborted part-way (no network, not enough scratch space) leaves an empty
-    // directory behind that passes every check above. ARCASHLA_GENOTYPE then
-    // fails deep inside the run with arcasHLA's own
+    // directory behind that satisfies the schema's existence check.
+    // ARCASHLA_GENOTYPE then fails deep inside the run with arcasHLA's own
     // "FileNotFoundError: .../dat/ref/hla.p.json", which points at the
     // container rather than at the real problem. hla.idx (the kallisto index)
     // and hla.p.json are only ever produced by `arcasHLA reference` itself, so
@@ -559,25 +560,13 @@ def arcashlaReferenceDirExistsError() {
     // tests/fixtures/arcashla_reference_stub/, a deliberate placeholder that
     // exists only to satisfy the path checks, and no stub task reads a
     // reference at all.
-    if (params.rna_samples && params.arcashla_reference_dir && !workflow.stubRun) {
+    if (params.arcashla_reference_dir && !workflow.stubRun) {
         def missing = ['hla.idx', 'hla.p.json'].findAll { ref_file ->
             !file("${params.arcashla_reference_dir}/${ref_file}").exists()
         }
         if (missing) {
             error("Please check --arcashla_reference_dir -> Not a built arcasHLA reference, missing ${missing.join(', ')}: ${params.arcashla_reference_dir}\nBuild one with scripts/build_arcashla_reference.sh (this directory exists but has no IMGT/HLA + kallisto index in it).")
         }
-    }
-}
-//
-// Exit pipeline if RNA inputs are provided without a whole-genome reference GTF
-//
-def gtfExistsError() {
-    if (params.rna_samples && !params.gtf) {
-        error("Please provide --gtf when using --rna_samples so featureCounts can find the whole-genome reference annotation.")
-    }
-
-    if (params.rna_samples && !file(params.gtf).exists()) {
-        error("Please check --gtf -> File does not exist: ${params.gtf}")
     }
 }
 

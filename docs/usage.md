@@ -305,7 +305,7 @@ The pin is 1.42.0 rather than the newer 1.46.0 because 1.42.0 is the most recent
 
 ## RNA/WGS sample key input
 
-`--sample_key` is a required top-level parameter whenever `--rna_samples` is provided. It maps RNA samples to their matched WGS sample (when one exists) for HLA consensus calling:
+`--sample_key` is a required top-level parameter. It maps RNA samples to their matched WGS sample (when one exists) for HLA consensus calling:
 
 ```bash
 --sample_key '[path to sample key file]'
@@ -325,7 +325,7 @@ RNA_SAMPLE_1,WGS_SAMPLE_1
 
 One row per RNA sample that has a matched WGS sample. An RNA sample simply absent from this file (or, when `--wgs_samples` is not provided at all, every RNA sample) is treated as having no WGS pairing: it is reported under a synthetic `RNA_ONLY:<rna_id>` group instead of being matched to a WGS sample. A `--sample_key` file with zero data rows is valid and simply routes every RNA sample through the `RNA_ONLY:<rna_id>` fallback.
 
-`HLA_CONSENSUS` runs automatically whenever `--rna_samples` (and therefore `--sample_key`) are provided; there is no separate flag to enable it. `--wgs_samples` is optional and only affects whether WGS-derived alleles are available to blend into the consensus call for matched individuals - it does not affect whether `HLA_CONSENSUS` (or the downstream HLApm/STAR steps) run at all. When `--wgs_samples` is not provided, `HLA_CONSENSUS` combines the arcasHLA RNA genotype calls with an empty HLA-LA input, so every group falls back to `RNA_ONLY:<rna_id>` and the consensus call is RNA-only.
+`HLA_CONSENSUS` always runs; there is no separate flag to enable it, and no way to skip it (`--rna_samples` and `--sample_key` are both required). `--wgs_samples` is optional and only affects whether WGS-derived alleles are available to blend into the consensus call for matched individuals - it does not affect whether `HLA_CONSENSUS` (or the downstream HLApm/STAR steps) run at all. When `--wgs_samples` is not provided, `HLA_CONSENSUS` combines the arcasHLA RNA genotype calls with an empty HLA-LA input, so every group falls back to `RNA_ONLY:<rna_id>` and the consensus call is RNA-only.
 
 Two further optional parameters let you drop specific samples from consensus calling without editing the RNA/WGS/HLA-LA inputs themselves:
 
@@ -336,7 +336,7 @@ Two further optional parameters let you drop specific samples from consensus cal
 
 ## HLApm personalized HLA reference
 
-`HLAPM` runs automatically whenever `HLA_CONSENSUS` runs, i.e. whenever `--rna_samples` (and therefore `--sample_key`) are provided, regardless of whether `--wgs_samples` is also provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
+`HLAPM` runs whenever `HLA_CONSENSUS` runs, which is always, regardless of whether `--wgs_samples` is also provided; there is no separate flag to enable it. It converts the `hla_consensus.rna_wgs_hla_consensus.tsv` consensus calls into one per-individual HLA allele-list TSV, then builds a personalized FASTA+GTF reference per allele, per individual, using [HLApm](https://github.com/davenportlab/HLApm)'s `bulkRNA_build_personalized_HLA_ref()` function. It does not run HLApm's own downstream STAR-index/mapping/allele-assignment stages, and single-cell mode is out of scope; instead, the pipeline runs its own STAR indexing step immediately afterwards (see below).
 
 `--hlapm_allowed_loci` (default `A,B,C,DRB1,DQA1,DQB1,DPA1,DPB1,DOA,DOB,G,E,F`) is a comma-separated allow-list of HLA loci (without the `HLA-` prefix) to include when building the HLApm input. `HLA_CONSENSUS` output loci not in this list (e.g. `HLA-DRB3`, `HLA-H`, `HLA-J`, `HLA-K`, `HLA-L`) are silently omitted from the per-individual HLApm input TSVs; no separate audit/log file is written for excluded loci. This default is restricted to the loci HLApm's own per-allele locus regex can reliably parse — passing other loci through can crash the underlying R script.
 
@@ -454,9 +454,9 @@ Package versions are pinned to those the pipeline's existing published results w
 
 ## Whole-genome common-reference gene counts
 
-Independent of `--sample_key`/HLApm, whenever `--rna_samples` is provided the pipeline also runs [nf-core/modules `SUBREAD_FEATURECOUNTS`](https://github.com/nf-core/modules/tree/master/modules/nf-core/subread/featurecounts) once per RNA sample, directly against that sample's original, full whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns) - not the arcasHLA MHC-extracted reads or HLApm personalized references used above. This reproduces, in-pipeline, the "original count matrix" half of the legacy prototype's `featureCounts` step, producing a per-sample whole-genome gene-count table without depending on an externally supplied count matrix file.
+Independent of `--sample_key`/HLApm, the pipeline also runs [nf-core/modules `SUBREAD_FEATURECOUNTS`](https://github.com/nf-core/modules/tree/master/modules/nf-core/subread/featurecounts) once per RNA sample, directly against that sample's original, full whole-genome, coordinate-sorted BAM (`--rna_samples`'s `bam`/`bai` columns) - not the arcasHLA MHC-extracted reads or HLApm personalized references used above. This reproduces, in-pipeline, the "original count matrix" half of the legacy prototype's `featureCounts` step, producing a per-sample whole-genome gene-count table without depending on an externally supplied count matrix file.
 
-`--gtf` is **mandatory** whenever `--rna_samples` is provided (mirroring the existing `--hlapm_repo` requirement above): the pipeline fails fast with a clear error if it is missing or does not exist.
+`--gtf` is **mandatory**, like `--rna_samples` and `--sample_key` themselves: nf-schema rejects a run that omits it with `Missing required parameter(s): gtf`, and rejects a path that does not exist, before any task starts.
 
 ```bash
 --gtf '[path to a whole-genome reference GTF]'
@@ -476,7 +476,7 @@ See [output docs](output.md#whole-genome-common-reference-gene-counts) for the r
 
 ## HLA-region per-read featureCounts reconciliation input
 
-Independent of `--sample_key`/HLApm, whenever `--rna_samples` is provided the pipeline also produces a per-read gene-assignment table for the HLA-region-restricted subset of each RNA sample's original BAM - the second of three steps so far toward the "hijack original count matrix" roadmap item. Unlike [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts) above (which is independent of/parallel to `ARCASHLA`), this step runs _after_ `ARCASHLA`, because it reuses `ARCASHLA_EXTRACT`'s own intermediate HLA-region BAM (`arcashla/extracted/<rna_id>.mhc.namesort.bam`, see [output docs](output.md#arcashla-read-extraction-and-validation)) rather than extracting the HLA region a second time from scratch. No new region-extraction dependency is introduced by this step.
+Independent of `--sample_key`/HLApm, the pipeline also produces a per-read gene-assignment table for the HLA-region-restricted subset of each RNA sample's original BAM - the second of three steps so far toward the "hijack original count matrix" roadmap item. Unlike [Whole-genome common-reference gene counts](#whole-genome-common-reference-gene-counts) above (which is independent of/parallel to `ARCASHLA`), this step runs _after_ `ARCASHLA`, because it reuses `ARCASHLA_EXTRACT`'s own intermediate HLA-region BAM (`arcashla/extracted/<rna_id>.mhc.namesort.bam`, see [output docs](output.md#arcashla-read-extraction-and-validation)) rather than extracting the HLA region a second time from scratch. No new region-extraction dependency is introduced by this step.
 
 `SUBREAD_FEATURECOUNTS` (aliased `SUBREAD_FEATURECOUNTS_HLA`, a second invocation of the same vendored module used above) runs with `-R BAM` against that intermediate BAM and the same cohort-wide `--gtf` reference already used above - no separate HLA-only GTF is built or required. This module has been patched (`nf-core modules patch subread/featurecounts`) to additionally capture the `-R BAM` per-read reannotated BAM as a declared output (previously an unexposed side effect of `-R BAM`); the patch also fixes an unrelated, pre-existing version-reporting defect (see `CHANGELOG.md`). The reannotated BAM is then converted to plain text with `samtools view`, filtered to `Assigned`-status lines, and reformatted into a `read_name`, `direction`, `gene_name`, `edit_distance` TSV by a new `bin/reformat_rnaseq_featurecounts.py` script. Both steps run inside `COUNTS_COMMONREF_HLA_REFORMAT`, which provisions its own `samtools` and `python3` from the [shared data-tools container](#shared-data-tools-container) - they are no longer expected on the host `$PATH`. (`SUBREAD_FEATURECOUNTS_HLA` itself continues the same container/`-profile conda` exception as `SUBREAD_FEATURECOUNTS` above.)
 
@@ -504,14 +504,19 @@ The typical command for running the pipeline is as follows:
 ```bash
 nextflow run nf-core/hlarnaseq \
     --rna_samples ./rna_samples.csv \
+    --sample_key ./rna_wgs_key.csv \
     --hla_region chr6:28500000-33400000 \
+    --gtf /path/to/annotation.gtf \
+    --arcashla_reference_dir /path/to/arcashla_reference \
     --outdir ./results
 ```
+
+All five of those input parameters, plus `--outdir`, are required: RNA-seq HLA quantification is the pipeline's purpose, so there is no RNA-less or typing-only mode. A run missing any of them stops immediately with nf-schema's `Missing required parameter(s): ...`. Genotype-side typing (`--wgs_samples` with HLA-LA, or `--array_samples` with HIBAG) stays optional.
 
 Every step provisions its own tools. All seventeen processes under `modules/local/` declare a `conda` directive backed by an `environment.yml` and a matching pinned `container`, as do all vendored `modules/nf-core/` modules — MHC extraction (samtools), read-pair validation and arcasHLA genotyping included. No pipeline step falls back to whatever happens to be on the host `$PATH`; running with none of `-profile conda`/`docker`/`singularity`/`apptainer` fails with an explicit message naming the missing tool. See [Dependencies and profiles](#dependencies-and-profiles).
 
 > [!NOTE]
-> `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment are now mandatory whenever `--rna_samples`/`--sample_key` are provided, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.
+> `-profile test`'s bundled RNA fixture is deliberately tiny and does not carry real HLA allele signal, so arcasHLA genotypes it as empty. Since `HLA_CONSENSUS`, `HLAPM`, and STAR indexing/alignment now always run, a real (non-stub) `-profile test` run will fail once it reaches `HLA_CONSENSUS`/`HLAPM` with no allele calls to consense. At this development stage, `-profile test` is validated with `-stub-run` (`nextflow run . -profile test -stub-run --outdir <OUTDIR>`), which proves process/channel wiring without needing real tool output. A real, non-stub `-profile test` run is not expected to succeed yet.
 
 Note that the pipeline will create the following files in your working directory:
 
